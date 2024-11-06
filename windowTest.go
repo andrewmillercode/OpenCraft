@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"runtime"
+	"time"
 
 	"os"
 
@@ -81,6 +83,9 @@ func initOpenGL() uint32 {
 		panic(err)
 	}
 
+	gl.Enable(gl.CULL_FACE)
+	gl.CullFace(gl.BACK)
+	gl.Enable(gl.DEPTH_TEST)
 	vertexShader := loadShader("shader.vert", gl.VERTEX_SHADER)
 	fragmentShader := loadShader("shader.frag", gl.FRAGMENT_SHADER)
 	prog := gl.CreateProgram()
@@ -152,7 +157,7 @@ func main() {
 		panic(err)
 	}
 	defer glfw.Terminate()
-	window, err := glfw.CreateWindow(640, 480, "Testing", nil, nil)
+	window, err := glfw.CreateWindow(1920, 1080, "Testing", nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -171,15 +176,27 @@ func main() {
 	gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
 	gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 
-	var xRotationAngle float32 = 45.0
+	var xRotationAngle, yRotationAngle, zRotationAngle float32 = 45.0, 45.0, 45.0
 
+	var startTime time.Time = time.Now()
+	var frameCount int = 0
 	for !window.ShouldClose() {
 		// Do OpenGL stuff.
 
 		//runs each (frame)?
-
-		xRotationAngle += 0.0001
-		model = initModelMatrix(xRotationAngle, 45, 45)
+		frameCount++
+		zRotationAngle += 0.0001
+		var currentTime time.Time = time.Now()
+		var timeElapsed time.Duration = currentTime.Sub(startTime)
+		//second / 10
+		if timeElapsed >= (100 * time.Millisecond) {
+			//per second
+			var fps float64 = float64(frameCount) / timeElapsed.Seconds()
+			frameCount = 0
+			startTime = currentTime
+			fmt.Printf("FPS: %.2f\n", fps)
+		}
+		model = initModelMatrix(xRotationAngle, yRotationAngle, zRotationAngle)
 		modelLoc = gl.GetUniformLocation(program, gl.Str("model\x00"))
 		gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 		// Clear screen
