@@ -396,8 +396,8 @@ func movement(window *glfw.Window) {
 		cameraPosition = cameraPosition.Add(cameraRight.Mul(movementSpeed * deltaTime))
 	}
 	if window.GetKey(glfw.KeySpace) == glfw.Press {
-		//cameraPosition = cameraPosition.Add(mgl32.Vec3{0, 1, 0}.Mul(movementSpeed * deltaTime))
-		yVel += 0.005
+		cameraPosition = cameraPosition.Add(mgl32.Vec3{0, 1, 0}.Mul(movementSpeed * deltaTime))
+		//yVel += 0.005
 	}
 	if window.GetKey(glfw.KeyLeftControl) == glfw.Press {
 		cameraPosition = cameraPosition.Sub(mgl32.Vec3{0, 1, 0}.Mul(movementSpeed * deltaTime))
@@ -443,7 +443,10 @@ func collisions(chunks []chunkData) {
 }
 
 func getCurrentChunkIndex() int {
-	return int(mgl32.Round(cameraPosition[0]/16, 0)*float32(numOfChunks) + mgl32.Round(cameraPosition[2]/16, 0))
+	//y * width + x
+	xPos := mgl32.Round(cameraPosition[0]/16, 0)
+	zPos := mgl32.Round(cameraPosition[2]/16, 0)
+	return int(zPos*float32(numOfChunks) + xPos)
 }
 func main() {
 	runtime.LockOSThread()
@@ -506,10 +509,11 @@ func main() {
 
 		//WASD movement
 		//gravity
-		yVel -= 0.1 * deltaTime
-		cameraPosition[1] += yVel
+		//yVel -= 0.1 * deltaTime
+		//cameraPosition[1] += yVel
 		movement(window)
-		collisions(chunks)
+		fmt.Printf("cur chunk: %d\n", getCurrentChunkIndex())
+		//collisions(chunks)
 		var currentTime time.Time = time.Now()
 		var timeElapsed time.Duration = currentTime.Sub(startTime)
 		if timeElapsed >= (100 * time.Millisecond) {
