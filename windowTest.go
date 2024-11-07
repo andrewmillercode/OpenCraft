@@ -206,6 +206,7 @@ func initOpenGL() uint32 {
 	gl.Enable(gl.CULL_FACE)
 	gl.CullFace(gl.BACK)
 	gl.Enable(gl.DEPTH_TEST)
+
 	vertexShader := loadShader("shader.vert", gl.VERTEX_SHADER)
 	fragmentShader := loadShader("shader.frag", gl.FRAGMENT_SHADER)
 	prog := gl.CreateProgram()
@@ -396,8 +397,8 @@ func movement(window *glfw.Window) {
 		cameraPosition = cameraPosition.Add(cameraRight.Mul(movementSpeed * deltaTime))
 	}
 	if window.GetKey(glfw.KeySpace) == glfw.Press {
-		cameraPosition = cameraPosition.Add(mgl32.Vec3{0, 1, 0}.Mul(movementSpeed * deltaTime))
-		//yVel += 0.005
+		//cameraPosition = cameraPosition.Add(mgl32.Vec3{0, 1, 0}.Mul(movementSpeed * deltaTime))
+		yVel += 0.005
 	}
 	if window.GetKey(glfw.KeyLeftControl) == glfw.Press {
 		cameraPosition = cameraPosition.Sub(mgl32.Vec3{0, 1, 0}.Mul(movementSpeed * deltaTime))
@@ -409,7 +410,7 @@ func collisions(chunks []chunkData) {
 
 	// Create player AABB from the player position
 	playerBox := AABB(
-		cameraPosition.Sub(mgl32.Vec3{0.5, 2, 0.5}), // Adjust based on player size
+		cameraPosition.Sub(mgl32.Vec3{0.5, 0, 0.5}), // Adjust based on player size
 		cameraPosition.Add(mgl32.Vec3{0.5, 1, 0.5}), // Adjust based on player size
 	)
 
@@ -444,9 +445,9 @@ func collisions(chunks []chunkData) {
 
 func getCurrentChunkIndex() int {
 	//y * width + x
-	xPos := mgl32.Round(cameraPosition[0]/16, 0)
-	zPos := mgl32.Round(cameraPosition[2]/16, 0)
-	return int(zPos*float32(numOfChunks) + xPos)
+	row := math.Floor(float64(cameraPosition[0] / 16))
+	column := math.Floor(float64(cameraPosition[2] / 16))
+	return int((float64((numOfChunks - 1)) * row) + column)
 }
 func main() {
 	runtime.LockOSThread()
@@ -455,14 +456,20 @@ func main() {
 		panic(err)
 	}
 	defer glfw.Terminate()
-	window, err := glfw.CreateWindow(1920, 1080, "Testing", nil, nil)
+	glfw.WindowHint(glfw.ContextVersionMajor, 3)
+	glfw.WindowHint(glfw.ContextVersionMinor, 3)
+	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
+	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
+	window, err := glfw.CreateWindow(1280, 720, "Testing", nil, nil)
 
 	if err != nil {
 		panic(err)
 	}
+
 	window.MakeContextCurrent()
 	program := initOpenGL()
 	gl.UseProgram(program)
+
 	glfw.SwapInterval(1)
 	var texture = loadTexture("oakBlock.png")
 	//ctx := loadFont("path/to/font.ttf")
@@ -509,15 +516,15 @@ func main() {
 
 		//WASD movement
 		//gravity
-		//yVel -= 0.1 * deltaTime
-		//cameraPosition[1] += yVel
+		yVel -= 0.1 * deltaTime
+		cameraPosition[1] += yVel
 		movement(window)
 		//math.Floor(cameraPosition[2] / 16)
-		row := mgl32.Round(cameraPosition[0]/16, 0)
-		column := mgl32.Round(cameraPosition[2]/16, 2)
-		calc := (4 * row) + column
+		row := math.Floor(float64(cameraPosition[0] / 16))
+		column := math.Floor(float64(cameraPosition[2] / 16))
+		calc := (float64((numOfChunks - 1)) * row) + column
 		fmt.Printf("cur chunk row: %.0f, column: %.2f calc: %.0f\n", row, column, calc)
-		//collisions(chunks)
+		collisions(chunks)
 		var currentTime time.Time = time.Now()
 		var timeElapsed time.Duration = currentTime.Sub(startTime)
 		if timeElapsed >= (100 * time.Millisecond) {
