@@ -44,18 +44,18 @@ func CheckAABBCollision(a, b aabb) bool {
 
 func chunk(pos mgl32.Vec3) chunkData {
 	var blocksData []blockData
-	var scale float32 = 0.1 // Adjust as needed for terrain detail
-
+	var scale float32 = 0.05 // Adjust as needed for terrain detail
+	var amplitude float32 = 4
 	// Generate terrain for each block in the chunk
-	for x := 0; x < 32; x += 2 {
-		for z := 0; z < 32; z += 2 {
+	for x := 0; x < 16; x++ {
+		for z := 0; z < 16; z++ {
 			// Correct world coordinate calculation
-			worldX := (float32(x) + pos[0]*16) * scale
-			worldZ := (float32(z) + pos[2]*16) * scale
+			worldX := (float32(x) + pos[0]) * scale
+			worldZ := (float32(z) + pos[2]) * scale
 
 			// Sample noise and scale height
-			noiseValue := math.Round(float64(noise.Eval2(worldX, worldZ))*3) * 2
-
+			noiseValue := mgl32.Round(noise.Eval2(worldX, worldZ)*amplitude, 0)
+			//noiseValue := noise.Eval2(worldX, worldZ) * amplitude
 			// Store block data
 			blocksData = append(blocksData, blockData{
 				pos:       mgl32.Vec3{float32(x), float32(noiseValue), float32(z)},
@@ -72,7 +72,7 @@ func chunk(pos mgl32.Vec3) chunkData {
 }
 
 var yVel float32 = 0
-var numOfChunks = 2
+var numOfChunks = 5
 var noise = opensimplex.New32(123)
 var deltaTime float32
 var (
@@ -92,53 +92,53 @@ var (
 )
 
 var cubeVertices = []float32{
-	// Front face (center of cross)
-	-1.0, -1.0, 1.0, 0.25, 0.3333, // Bottom-left
-	1.0, -1.0, 1.0, 0.5, 0.3333, // Bottom-right
-	1.0, 1.0, 1.0, 0.5, 0.6666, // Top-right
-	-1.0, -1.0, 1.0, 0.25, 0.3333, // Bottom-left
-	1.0, 1.0, 1.0, 0.5, 0.6666, // Top-right
-	-1.0, 1.0, 1.0, 0.25, 0.6666, // Top-left
+	-0.5, -0.5, 0.5, 0.25, 0.3333, // Bottom-left
+	0.5, -0.5, 0.5, 0.5, 0.3333, // Bottom-right
+	0.5, 0.5, 0.5, 0.5, 0.6666, // Top-right
+	-0.5, -0.5, 0.5, 0.25, 0.3333, // Bottom-left
+	0.5, 0.5, 0.5, 0.5, 0.6666, // Top-right
+	-0.5, 0.5, 0.5, 0.25, 0.6666, // Top-left
 
-	// Back face (right side of cross)
-	-1.0, -1.0, -1.0, 0.5, 0.3333, // Bottom-left
-	-1.0, 1.0, -1.0, 0.5, 0.6666, // Top-left
-	1.0, 1.0, -1.0, 0.75, 0.6666, // Top-right
-	-1.0, -1.0, -1.0, 0.5, 0.3333, // Bottom-left
-	1.0, 1.0, -1.0, 0.75, 0.6666, // Top-right
-	1.0, -1.0, -1.0, 0.75, 0.3333, // Bottom-right
+	// Back face
+	-0.5, -0.5, -0.5, 0.5, 0.3333, // Bottom-left
+	-0.5, 0.5, -0.5, 0.5, 0.6666, // Top-left
+	0.5, 0.5, -0.5, 0.75, 0.6666, // Top-right
+	-0.5, -0.5, -0.5, 0.5, 0.3333, // Bottom-left
+	0.5, 0.5, -0.5, 0.75, 0.6666, // Top-right
+	0.5, -0.5, -0.5, 0.75, 0.3333, // Bottom-right
 
-	// Left face (left side of cross)
-	-1.0, -1.0, -1.0, 0.0, 0.3333, // Bottom-left
-	-1.0, -1.0, 1.0, 0.25, 0.3333, // Bottom-right
-	-1.0, 1.0, 1.0, 0.25, 0.6666, // Top-right
-	-1.0, -1.0, -1.0, 0.0, 0.3333, // Bottom-left
-	-1.0, 1.0, 1.0, 0.25, 0.6666, // Top-right
-	-1.0, 1.0, -1.0, 0.0, 0.6666, // Top-left
+	// Left face
+	-0.5, -0.5, -0.5, 0.0, 0.3333, // Bottom-left
+	-0.5, -0.5, 0.5, 0.25, 0.3333, // Bottom-right
+	-0.5, 0.5, 0.5, 0.25, 0.6666, // Top-right
+	-0.5, -0.5, -0.5, 0.0, 0.3333, // Bottom-left
+	-0.5, 0.5, 0.5, 0.25, 0.6666, // Top-right
+	-0.5, 0.5, -0.5, 0.0, 0.6666, // Top-left
 
 	// Right face
-	1.0, -1.0, -1.0, 0.75, 0.3333, // Bottom-left
-	1.0, 1.0, -1.0, 0.75, 0.6666, // Top-left
-	1.0, 1.0, 1.0, 1.0, 0.6666, // Top-right
-	1.0, -1.0, -1.0, 0.75, 0.3333, // Bottom-left
-	1.0, 1.0, 1.0, 1.0, 0.6666, // Top-right
-	1.0, -1.0, 1.0, 1.0, 0.3333, // Bottom-right
+	0.5, -0.5, -0.5, 0.75, 0.3333, // Bottom-left
+	0.5, 0.5, -0.5, 0.75, 0.6666, // Top-left
+	0.5, 0.5, 0.5, 1.0, 0.6666, // Top-right
+	0.5, -0.5, -0.5, 0.75, 0.3333, // Bottom-left
+	0.5, 0.5, 0.5, 1.0, 0.6666, // Top-right
+	0.5, -0.5, 0.5, 1.0, 0.3333, // Bottom-right
 
-	// Top face (top of cross)
-	-1.0, 1.0, -1.0, 0.25, 0.0, // Bottom-left
-	-1.0, 1.0, 1.0, 0.25, 0.3333, // Bottom-right
-	1.0, 1.0, 1.0, 0.5, 0.3333, // Top-right
-	-1.0, 1.0, -1.0, 0.25, 0.0, // Bottom-left
-	1.0, 1.0, 1.0, 0.5, 0.3333, // Top-right
-	1.0, 1.0, -1.0, 0.5, 0.0, // Top-left
+	// Top face
+	-0.5, 0.5, -0.5, 0.25, 0.0, // Bottom-left
+	-0.5, 0.5, 0.5, 0.25, 0.3333, // Bottom-right
+	0.5, 0.5, 0.5, 0.5, 0.3333, // Top-right
+	-0.5, 0.5, -0.5, 0.25, 0.0, // Bottom-left
+	0.5, 0.5, 0.5, 0.5, 0.3333, // Top-right
+	0.5, 0.5, -0.5, 0.5, 0.0, // Top-left
 
-	// Bottom face (bottom of cross)
-	-1.0, -1.0, -1.0, 0.25, 0.6666, // Bottom-left
-	1.0, -1.0, -1.0, 0.5, 0.6666, // Bottom-right
-	1.0, -1.0, 1.0, 0.5, 1.0, // Top-right
-	-1.0, -1.0, -1.0, 0.25, 0.6666, // Bottom-left
-	1.0, -1.0, 1.0, 0.5, 1.0, // Top-right
-	-1.0, -1.0, 1.0, 0.25, 1.0, // Top-left
+	// Bottom face
+	-0.5, -0.5, -0.5, 0.25, 0.6666, // Bottom-left
+	0.5, -0.5, -0.5, 0.5, 0.6666, // Bottom-right
+	0.5, -0.5, 0.5, 0.5, 1.0, // Top-right
+	-0.5, -0.5, -0.5, 0.25, 0.6666, // Bottom-left
+	0.5, -0.5, 0.5, 0.5, 1.0, // Top-right
+	-0.5, -0.5, 0.5, 0.25, 1.0, // Top-left
+
 }
 
 func initVAO(points []float32) uint32 {
@@ -490,9 +490,9 @@ func main() {
 
 	var chunks []chunkData
 
-	for x := 0; x < (numOfChunks * 16); x += 16 {
-		for z := 0; z < (numOfChunks * 16); z += 16 {
-			chunks = append(chunks, chunk(mgl32.Vec3{float32(x), 0, float32(z)}))
+	for x := 0; x < numOfChunks; x++ {
+		for z := 0; z < numOfChunks; z++ {
+			chunks = append(chunks, chunk(mgl32.Vec3{float32(x * 16), 0, float32(z * 16)}))
 		}
 	}
 
@@ -512,7 +512,11 @@ func main() {
 		//yVel -= 0.1 * deltaTime
 		//cameraPosition[1] += yVel
 		movement(window)
-		fmt.Printf("cur chunk: %d\n", getCurrentChunkIndex())
+
+		row := mgl32.Round(cameraPosition[0]/16, 0)
+		column := mgl32.Round(cameraPosition[2]/16, 0)
+		calc := (4 * row) + column
+		fmt.Printf("cur chunk row: %.0f, column: %.0f calc: %.0f\n", row, column, calc)
 		//collisions(chunks)
 		var currentTime time.Time = time.Now()
 		var timeElapsed time.Duration = currentTime.Sub(startTime)
