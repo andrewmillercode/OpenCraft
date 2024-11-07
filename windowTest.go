@@ -288,7 +288,7 @@ func loadShader(shaderFilePath string, shaderType uint32) uint32 {
 
 	shader := gl.CreateShader(shaderType)
 	stringifiedShader := stringFromShaderFile(shaderFilePath)
-	csources, free := gl.Strs(stringifiedShader)
+	csources, free := gl.Strs(stringifiedShader + "\x00")
 	gl.ShaderSource(shader, 1, csources, nil)
 	free()
 
@@ -410,15 +410,16 @@ func collisions(chunks []chunkData) {
 
 	// Create player AABB from the player position
 	playerBox := AABB(
-		cameraPosition.Sub(mgl32.Vec3{0.5, 0, 0.5}), // Adjust based on player size
+		cameraPosition.Sub(mgl32.Vec3{0.5, 1, 0.5}), // Adjust based on player size
 		cameraPosition.Add(mgl32.Vec3{0.5, 1, 0.5}), // Adjust based on player size
 	)
 
 	// Check for collision with blocks in the world
+	fmt.Printf("Colliding Chunk: %d", getCurrentChunkIndex())
 	for _, block := range chunks[getCurrentChunkIndex()].blocksData {
 		blockBox := AABB(
 			block.pos,
-			block.pos.Add(mgl32.Vec3{2, 2, 2}),
+			block.pos.Add(mgl32.Vec3{1, 1, 1}),
 		)
 
 		// If a collision is detected, adjust the player's position
@@ -426,9 +427,10 @@ func collisions(chunks []chunkData) {
 			fmt.Printf("Colliding at Y-%0.1f\n", playerBox.Min[1])
 			// Example: Stop the player from moving through the block (can be adjusted)
 			if yVel < 0 {
-				cameraPosition[1] = block.pos[1] + 4
+				cameraPosition[1] = block.pos[1] + 2
 				yVel = 0
 			}
+
 			/*
 				if velocity.Y() < 0 { // Moving down
 					newPos[1] = block.Pos[1] + 1 // Move player to just above the block
@@ -447,7 +449,8 @@ func getCurrentChunkIndex() int {
 	//y * width + x
 	row := math.Floor(float64(cameraPosition[0] / 16))
 	column := math.Floor(float64(cameraPosition[2] / 16))
-	return int((float64((numOfChunks - 1)) * row) + column)
+	adjustedRow := (float64((numOfChunks)) * row)
+	return int(adjustedRow + column)
 }
 func main() {
 	runtime.LockOSThread()
@@ -522,8 +525,8 @@ func main() {
 		//math.Floor(cameraPosition[2] / 16)
 		row := math.Floor(float64(cameraPosition[0] / 16))
 		column := math.Floor(float64(cameraPosition[2] / 16))
-		calc := (float64((numOfChunks - 1)) * row) + column
-		fmt.Printf("cur chunk row: %.0f, column: %.2f calc: %.0f\n", row, column, calc)
+		adjustedRow := (float64((numOfChunks)) * row)
+		fmt.Printf("cur chunk row: %.0f, column: %.2f calc: %.0f\n", row, column, adjustedRow+column)
 		collisions(chunks)
 		var currentTime time.Time = time.Now()
 		var timeElapsed time.Duration = currentTime.Sub(startTime)
