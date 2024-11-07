@@ -512,11 +512,11 @@ func main() {
 		//yVel -= 0.1 * deltaTime
 		//cameraPosition[1] += yVel
 		movement(window)
-
+		//math.Floor(cameraPosition[2] / 16)
 		row := mgl32.Round(cameraPosition[0]/16, 0)
-		column := mgl32.Round(cameraPosition[2]/16, 0)
+		column := mgl32.Round(cameraPosition[2]/16, 2)
 		calc := (4 * row) + column
-		fmt.Printf("cur chunk row: %.0f, column: %.0f calc: %.0f\n", row, column, calc)
+		fmt.Printf("cur chunk row: %.0f, column: %.2f calc: %.0f\n", row, column, calc)
 		//collisions(chunks)
 		var currentTime time.Time = time.Now()
 		var timeElapsed time.Duration = currentTime.Sub(startTime)
