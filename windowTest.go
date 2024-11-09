@@ -22,61 +22,100 @@ import (
 type blockData struct {
 	blockType uint8
 }
+
+// 12 bytes if Vec3, 8 bytes if custom
 type chunkData struct {
-	pos         mgl32.Vec3
-	blocksData  map[mgl32.Vec3]blockData
+	pos         chunkPosition
+	blocksData  map[blockPosition]blockData
 	vao         uint32
-	vertexCount int32
+	vertexCount uint32
 }
 
-func chunk(pos mgl32.Vec3) chunkData {
-	var blocksData map[mgl32.Vec3]blockData = make(map[mgl32.Vec3]blockData)
-	var scale float32 = 0.02 // Adjust as needed for terrain detail
-	var amplitude float32 = 20
+// 12 bytes Vec3, 4 bytes
+var chunks []chunkData
 
-	for x := 0; x < 16; x++ {
+type blockPosition struct {
+	x int8
+	y int16
+	z int8
+}
+type chunkPosition struct {
+	x int32
+	z int32
+}
 
-		for z := 0; z < 16; z++ {
+func fractalNoise(x int32, z int32, amplitude float32, octaves int, lacunarity float32, persistence float32, scale float32) int16 {
+	val := int16(0)
+	x1 := float32(x)
+	z1 := float32(z)
+
+	for i := 0; i < octaves; i++ {
+		val += int16(noise.Eval2(x1/scale, z1/scale) * amplitude)
+		z1 *= lacunarity
+		x1 *= lacunarity
+		amplitude *= persistence
+	}
+	if val < -128 {
+		return -128
+	}
+	if val > 128 {
+		return 128
+	}
+	return val
+
+}
+func chunk(pos chunkPosition) chunkData {
+	var blocksData map[blockPosition]blockData = make(map[blockPosition]blockData)
+	var scale float32 = 100 // Adjust as needed for terrain detail
+	var amplitude float32 = 30
+
+	for x := int8(0); x < 16; x++ {
+
+		for z := int8(0); z < 16; z++ {
 
 			//World position of the block
-			worldX := (float32(x) + pos[0]) * scale
+			//worldX := float32(int32(x)+pos.x) * scale
 			//worldY := (float32(y) + pos[1])
-			worldZ := (float32(z) + pos[2]) * scale
+			//worldZ := float32(int32(z)+pos.z)) * scalef
+			noiseValue := fractalNoise(int32(x)+pos.x, int32(z)+pos.z, amplitude, 4, 1.5, 0.5, scale)
+			for y := int16(-128); y <= noiseValue; y++ {
 
-			noiseValue := int(noise.Eval2(worldX, worldZ) * amplitude)
-			for y := -36; y < noiseValue; y++ {
-				blocksData[mgl32.Vec3{float32(x), float32(y), float32(z)}] = blockData{
+				//fmt.Printf("%.2f", noiseValue)
+				blocksData[blockPosition{x, y, z}] = blockData{
 					blockType: 0,
 				}
 			}
 
 		}
 	}
-	var caveNoiseScale float32 = 0.02
-	//caves?
-	for x := 0; x < 16; x++ {
+	/*
+		var caveNoiseScale float32 = 0.02
+		//caves?
 
-		for z := 0; z < 16; z++ {
+		for x := int8(0); x < 16; x++ {
 
-			for y := -36; y < 36; y++ {
-				worldX := (float32(x) + pos[0]) * caveNoiseScale
-				worldY := (float32(y) + pos[1]) * caveNoiseScale
-				worldZ := (float32(z) + pos[2]) * caveNoiseScale
-				noiseValue := noise.Eval3(worldX, worldY, worldZ)
-				if noiseValue >= 0.6 {
-					delete(blocksData, mgl32.Vec3{float32(x), float32(y), float32(z)})
+			for z := int8(0); z < 16; z++ {
+
+				for y := int16(-36); y < 36; y++ {
+					worldX := float32(int32(x)+pos.x) * caveNoiseScale
+					worldY := float32(y) * caveNoiseScale
+					worldZ := float32(int32(z)+pos.z) * caveNoiseScale
+					noiseValue := int16(noise.Eval3(worldX, worldY, worldZ) * 10)
+					//fmt.Printf("%d", noiseValue)
+					if exists, _ := blocksData[blockPosition{x, noiseValue, z}]; exists {
+						delete(blocksData, blockPosition{x, noiseValue, z})
+					}
 				}
+
 			}
-
 		}
-	}
+	*/
 
-	vao, vertexCount := createChunkVAO(blocksData)
 	return chunkData{
 		pos:         pos,
 		blocksData:  blocksData,
-		vao:         vao,
-		vertexCount: vertexCount,
+		vao:         0,
+		vertexCount: 0,
 	}
 }
 
@@ -150,7 +189,7 @@ func (a aabb) intersects(b aabb) bool {
 
 var isOnGround bool
 var velocity mgl32.Vec3 = mgl32.Vec3{0, 0, 0}
-var numOfChunks = 35
+var numOfChunks int32 = 35
 var noise = opensimplex.New32(123)
 var deltaTime float32
 var (
@@ -252,50 +291,91 @@ _, a := chunkData[mgl32.Vec3{key[0], key[1] + 1, key[2]}]
 		continue
 	}
 */
-func createChunkVAO(chunkData map[mgl32.Vec3]blockData) (uint32, int32) {
+func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32) (uint32, uint32) {
 
 	var chunkVertices []float32
 	for key := range chunkData {
 
-		_, top := chunkData[mgl32.Vec3{key[0], key[1] + 1, key[2]}]
-		_, bot := chunkData[mgl32.Vec3{key[0], key[1] - 1, key[2]}]
-		_, l := chunkData[mgl32.Vec3{key[0] - 1, key[1], key[2]}]
-		_, r := chunkData[mgl32.Vec3{key[0] + 1, key[1], key[2]}]
-		_, b := chunkData[mgl32.Vec3{key[0], key[1], key[2] - 1}]
-		_, f := chunkData[mgl32.Vec3{key[0], key[1], key[2] + 1}]
+		_, top := chunkData[blockPosition{key.x, key.y + 1, key.z}]
+		_, bot := chunkData[blockPosition{key.x, key.y - 1, key.z}]
+		_, l := chunkData[blockPosition{key.x - 1, key.y, key.z}]
+		_, r := chunkData[blockPosition{key.x + 1, key.y, key.z}]
+		_, b := chunkData[blockPosition{key.x, key.y, key.z - 1}]
+		_, f := chunkData[blockPosition{key.x, key.y, key.z + 1}]
 
 		if top && bot && l && r && b && f {
 			continue
 		}
+
 		for i := 0; i < len(cubeVertices); i += 5 {
-			x := cubeVertices[i] + key[0]
-			y := cubeVertices[i+1] + key[1]
-			z := cubeVertices[i+2] + key[2]
+			x := cubeVertices[i] + float32(key.x)
+			y := cubeVertices[i+1] + float32(key.y)
+			z := cubeVertices[i+2] + float32(key.z)
 			u := cubeVertices[i+3]
 			v := cubeVertices[i+4]
 
 			if i >= (0*30) && i <= (0*30)+25 {
+
 				if !f {
+
+					if key.z == 15 {
+						rowFront := col + 1
+						adjustedRow := (numOfChunks * row)
+
+						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+rowFront), 0, float64(numOfChunks*numOfChunks)-1))].blocksData[blockPosition{key.x, key.y, 0}]
+						if blockAdjChunk {
+							continue
+						}
+					}
+
 					chunkVertices = append(chunkVertices, x, y, z, u, v)
 				}
 				continue
 			}
 			if i >= (1*30) && i <= (1*30)+25 {
+
 				if !b {
+					if key.z == 0 {
+						rowFront := col - 1
+						adjustedRow := (numOfChunks * row)
+						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+rowFront), 0, float64(numOfChunks*numOfChunks)-1))].blocksData[blockPosition{key.x, key.y, 15}]
+						if blockAdjChunk {
+							continue
+						}
+					}
 					chunkVertices = append(chunkVertices, x, y, z, u, v)
 				}
 				continue
 			}
 			if i >= (2*30) && i <= (2*30)+25 {
 				if !l {
+					if key.x == 0 {
+						rowFront := row - 1
+						adjustedRow := (numOfChunks * rowFront)
+						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+col), 0, float64(numOfChunks*numOfChunks)-1))].blocksData[blockPosition{15, key.y, key.z}]
+						if blockAdjChunk {
+							continue
+						}
+					}
+
 					chunkVertices = append(chunkVertices, x, y, z, u, v)
 				}
 				continue
 			}
 			if i >= (3*30) && i <= (3*30)+25 {
+
 				if !r {
+					if key.x == 15 {
+						rowFront := row + 1
+						adjustedRow := (numOfChunks * rowFront)
+						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+col), 0, float64(numOfChunks*numOfChunks)-1))].blocksData[blockPosition{0, key.y, key.z}]
+						if blockAdjChunk {
+							continue
+						}
+					}
 					chunkVertices = append(chunkVertices, x, y, z, u, v)
 				}
+
 				continue
 			}
 			if i >= (4*30) && i <= (4*30)+25 {
@@ -305,7 +385,7 @@ func createChunkVAO(chunkData map[mgl32.Vec3]blockData) (uint32, int32) {
 				continue
 			}
 			if i >= (5*30) && i <= (5*30)+25 {
-				if !bot {
+				if !bot && key.y != -128 {
 					chunkVertices = append(chunkVertices, x, y, z, u, v)
 				}
 				continue
@@ -333,7 +413,7 @@ func createChunkVAO(chunkData map[mgl32.Vec3]blockData) (uint32, int32) {
 	// Define the texture coordinate data layout: 2 components (u, v)
 	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, 5*4, uintptr(3*4))
 
-	return vao, int32(len(chunkVertices))
+	return vao, uint32(len(chunkVertices))
 }
 func initOpenGL() uint32 {
 	if err := gl.Init(); err != nil {
@@ -574,15 +654,16 @@ func collisions(chunks []chunkData) {
 		for z := -1; z <= 1; z++ {
 			newRow := playerChunkX + x
 			newCol := playerChunkZ + z
-			if newRow >= 0 && newRow < len(chunks)/numOfChunks && newCol >= 0 && newCol < numOfChunks {
+			if newRow >= 0 && newRow < len(chunks)/int(numOfChunks) && newCol >= 0 && newCol < int(numOfChunks) {
 
-				chunk := chunks[(newRow*numOfChunks)+newCol]
+				chunk := chunks[(newRow*int(numOfChunks))+newCol]
 				for i := 0; i < 3; i++ {
 					var colliders []collider
 					for key, _ := range chunk.blocksData {
+						floatBlockPos := mgl32.Vec3{float32(key.x), float32(key.y), float32(key.z)}
 						blockAABB := AABB(
-							key.Sub(mgl32.Vec3{0.5, 0.5, 0.5}).Add(chunk.pos),
-							key.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Add(chunk.pos),
+							floatBlockPos.Sub(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(chunk.pos.x), 0, float32(chunk.pos.z)}),
+							floatBlockPos.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(chunk.pos.x), 0, float32(chunk.pos.z)}),
 						)
 
 						entry, normal := collide(playerBox, blockAABB)
@@ -776,12 +857,18 @@ func main() {
 	var tickUpdateRate float32 = float32(1.0 / 120.0) //for ticks
 	var tickAccumulator float32
 	//var ticksFell int
-	var chunks []chunkData
 
-	for x := 0; x < numOfChunks; x++ {
-		for z := 0; z < numOfChunks; z++ {
-			chunks = append(chunks, chunk(mgl32.Vec3{float32(x * 16), 0, float32(z * 16)}))
+	for x := int32(0); x < numOfChunks; x++ {
+		for z := int32(0); z < numOfChunks; z++ {
+			chunks = append(chunks, chunk(chunkPosition{x * 16, z * 16}))
 		}
+	}
+	for i := range chunks {
+		row := int32(i) / numOfChunks
+		col := int32(i) % numOfChunks
+		vao, vertexCount := createChunkVAO(chunks[i].blocksData, row, col)
+		chunks[i].vao = vao
+		chunks[i].vertexCount = vertexCount
 	}
 
 	for !window.ShouldClose() {
@@ -833,7 +920,7 @@ func main() {
 
 		for _, chunk := range chunks {
 			// Generate model matrix with translation
-			model := mgl32.Translate3D(chunk.pos[0], chunk.pos[1], chunk.pos[2])
+			model := mgl32.Translate3D(float32(chunk.pos.x), 0, float32(chunk.pos.z))
 			modelLoc := gl.GetUniformLocation(program, gl.Str("model\x00"))
 			gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 
