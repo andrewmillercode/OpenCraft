@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/png"
 	"io"
 	"math"
+	"math/rand"
 	"os"
 	"runtime"
 	"time"
@@ -20,15 +22,16 @@ import (
 )
 
 type blockData struct {
-	blockType uint8
+	blockType  uint8
+	lightLevel uint8
 }
 
 // 12 bytes if Vec3, 8 bytes if custom
 type chunkData struct {
-	pos         chunkPosition
-	blocksData  map[blockPosition]blockData
-	vao         uint32
-	vertexCount uint32
+	pos        chunkPosition
+	blocksData map[blockPosition]blockData
+	vao        uint32
+	trisCount  uint32
 }
 
 // 12 bytes Vec3, 4 bytes
@@ -64,6 +67,23 @@ func fractalNoise(x int32, z int32, amplitude float32, octaves int, lacunarity f
 	return val
 
 }
+func fractalNoise3D(x int32, y int32, z int32, amplitude float32, scale float32) float32 {
+	val := float32(0)
+	x1 := float32(x)
+	y1 := float32(y)
+	z1 := float32(z)
+
+	val += noise.Eval3(x1/(scale+8), y1/scale, z1/(scale+8)) * amplitude
+
+	if val < -1 {
+		return -1
+	}
+	if val > 1 {
+		return 1
+	}
+	return val
+
+}
 func chunk(pos chunkPosition) chunkData {
 	var blocksData map[blockPosition]blockData = make(map[blockPosition]blockData)
 	var scale float32 = 100 // Adjust as needed for terrain detail
@@ -73,16 +93,29 @@ func chunk(pos chunkPosition) chunkData {
 
 		for z := int8(0); z < 16; z++ {
 
-			//World position of the block
-			//worldX := float32(int32(x)+pos.x) * scale
-			//worldY := (float32(y) + pos[1])
-			//worldZ := float32(int32(z)+pos.z)) * scalef
 			noiseValue := fractalNoise(int32(x)+pos.x, int32(z)+pos.z, amplitude, 4, 1.5, 0.5, scale)
 			for y := int16(-128); y <= noiseValue; y++ {
 
-				//fmt.Printf("%.2f", noiseValue)
-				blocksData[blockPosition{x, y, z}] = blockData{
-					blockType: 0,
+				//determine block type
+				blockType := grassID
+				fluctuation := int16(random.Float32() * 5)
+				if y < ((noiseValue - 6) + fluctuation) {
+					blockType = dirtID
+				}
+				if y < ((noiseValue - 10) + fluctuation) {
+					blockType = stoneID
+				}
+				if y > 0 {
+					blocksData[blockPosition{x, y, z}] = blockData{
+						blockType: blockType,
+					}
+				} else {
+					isCave := fractalNoise3D(int32(x)+pos.x, int32(y), int32(z)+pos.z, 1, 10)
+					if isCave > -0.5 {
+						blocksData[blockPosition{x, y, z}] = blockData{
+							blockType: blockType,
+						}
+					}
 				}
 			}
 
@@ -112,10 +145,10 @@ func chunk(pos chunkPosition) chunkData {
 	*/
 
 	return chunkData{
-		pos:         pos,
-		blocksData:  blocksData,
-		vao:         0,
-		vertexCount: 0,
+		pos:        pos,
+		blocksData: blocksData,
+		vao:        0,
+		trisCount:  0,
 	}
 }
 
@@ -187,10 +220,12 @@ func (a aabb) intersects(b aabb) bool {
 		a.Max.X() > b.Min.X() && a.Max.Y() > b.Min.Y() && a.Max.Z() > b.Min.Z()
 }
 
+var isFlying bool = true
 var isOnGround bool
 var velocity mgl32.Vec3 = mgl32.Vec3{0, 0, 0}
-var numOfChunks int32 = 35
+var numOfChunks int32 = 15
 var noise = opensimplex.New32(123)
+var random = rand.New(rand.NewSource(123))
 var deltaTime float32
 var (
 	yaw        float64 = -90.0 // Horizontal angle initialized to look down -Z axis
@@ -210,87 +245,113 @@ var (
 	movementSpeed float32 = 4
 )
 
-var cubeVertices = []float32{
+var (
+	dirtID  uint8 = 0
+	grassID uint8 = 1
+	stoneID uint8 = 2
+)
+
+var cubeVertices []float32 = []float32{
 
 	// Front face
-	-0.5, -0.5, 0.5, 0.25, 0.6666, // Bottom-left
-	0.5, -0.5, 0.5, 0.5, 0.6666, // Bottom-right
-	0.5, 0.5, 0.5, 0.5, 0.3333, // Top-right
-	-0.5, -0.5, 0.5, 0.25, 0.6666, // Bottom-left
-	0.5, 0.5, 0.5, 0.5, 0.3333, // Top-right
-	-0.5, 0.5, 0.5, 0.25, 0.3333, // Top-left
+	-0.5, -0.5, 0.5, // Bottom-left
+	0.5, -0.5, 0.5, // Bottom-right
+	0.5, 0.5, 0.5, // Top-right
+	-0.5, -0.5, 0.5, // Bottom-left
+	0.5, 0.5, 0.5, // Top-right
+	-0.5, 0.5, 0.5, // Top-left
 
 	// Back face
-	-0.5, -0.5, -0.5, 0.5, 0.6666, // Bottom-left
-	-0.5, 0.5, -0.5, 0.5, 0.3333, // Top-left
-	0.5, 0.5, -0.5, 0.75, 0.3333, // Top-right
-	-0.5, -0.5, -0.5, 0.5, 0.6666, // Bottom-left
-	0.5, 0.5, -0.5, 0.75, 0.3333, // Top-right
-	0.5, -0.5, -0.5, 0.75, 0.6666, // Bottom-right
+	-0.5, -0.5, -0.5, // Bottom-left
+	-0.5, 0.5, -0.5, // Top-left
+	0.5, 0.5, -0.5, // Top-right
+	-0.5, -0.5, -0.5, // Bottom-left
+	0.5, 0.5, -0.5, // Top-right
+	0.5, -0.5, -0.5, // Bottom-right
 
 	// Left face
-	-0.5, -0.5, -0.5, 0.0, 0.6666, // Bottom-left
-	-0.5, -0.5, 0.5, 0.25, 0.6666, // Bottom-right
-	-0.5, 0.5, 0.5, 0.25, 0.3333, // Top-right
-	-0.5, -0.5, -0.5, 0.0, 0.6666, // Bottom-left
-	-0.5, 0.5, 0.5, 0.25, 0.3333, // Top-right
-	-0.5, 0.5, -0.5, 0.0, 0.3333, // Top-left
+	-0.5, -0.5, -0.5, // Bottom-left
+	-0.5, -0.5, 0.5, // Bottom-right
+	-0.5, 0.5, 0.5, // Top-right
+	-0.5, -0.5, -0.5, // Bottom-left
+	-0.5, 0.5, 0.5, // Top-right
+	-0.5, 0.5, -0.5, // Top-left
 
 	// Right face
-	0.5, -0.5, -0.5, 0.75, 0.6666, // Bottom-left
-	0.5, 0.5, -0.5, 0.75, 0.3333, // Top-left
-	0.5, 0.5, 0.5, 1.0, 0.3333, // Top-right
-	0.5, -0.5, -0.5, 0.75, 0.6666, // Bottom-left
-	0.5, 0.5, 0.5, 1.0, 0.3333, // Top-right
-	0.5, -0.5, 0.5, 1.0, 0.6666, // Bottom-right
+	0.5, -0.5, -0.5, // Bottom-left
+	0.5, 0.5, -0.5, // Top-left
+	0.5, 0.5, 0.5, // Top-right
+	0.5, -0.5, -0.5, // Bottom-left
+	0.5, 0.5, 0.5, // Top-right
+	0.5, -0.5, 0.5, // Bottom-right
 
 	// Top face
-	-0.5, 0.5, -0.5, 0.25, 0.3333, // Bottom-left
-	-0.5, 0.5, 0.5, 0.5, 0.3333, // Bottom-right
-	0.5, 0.5, 0.5, 0.5, 0.0, // Top-right
-	-0.5, 0.5, -0.5, 0.25, 0.3333, // Bottom-left
-	0.5, 0.5, 0.5, 0.5, 0.0, // Top-right
-	0.5, 0.5, -0.5, 0.25, 0.0, // Top-left
+	-0.5, 0.5, -0.5, // Bottom-left
+	-0.5, 0.5, 0.5, // Bottom-right
+	0.5, 0.5, 0.5, // Top-right
+	-0.5, 0.5, -0.5, // Bottom-left
+	0.5, 0.5, 0.5, // Top-right
+	0.5, 0.5, -0.5, // Top-left
 
 	// Bottom face
-	-0.5, -0.5, -0.5, 0.25, 1.0, // Bottom-left
-	0.5, -0.5, -0.5, 0.25, 0.6666, // Bottom-right
-	0.5, -0.5, 0.5, 0.5, 0.6666, // Top-right
-	-0.5, -0.5, -0.5, 0.25, 1.0, // Bottom-left
-	0.5, -0.5, 0.5, 0.5, 0.6666, // Top-right
-	-0.5, -0.5, 0.5, 0.5, 1.0, // Top-left
+	-0.5, -0.5, -0.5, // Bottom-left
+	0.5, -0.5, -0.5, // Bottom-right
+	0.5, -0.5, 0.5, // Top-right
+	-0.5, -0.5, -0.5, // Bottom-left
+	0.5, -0.5, 0.5, // Top-right
+	-0.5, -0.5, 0.5, // Top-left
 
 }
+var cubeUVs []uint8 = []uint8{
+	// Front face
+	0, 3, // Bottom-left
+	2, 3, // Bottom-right
+	2, 1, // Top-right
+	0, 3, // Bottom-left
+	2, 1, // Top-right
+	0, 1, // Top-left
 
-func initVAO(points []float32) uint32 {
-	var vbo uint32
-	gl.GenBuffers(1, &vbo)
-	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
-	gl.BufferData(gl.ARRAY_BUFFER, 4*len(points), gl.Ptr(points), gl.STATIC_DRAW)
+	// Back face
+	2, 3, // Bottom-left
+	2, 1, // Top-left
+	0, 1, // Top-right
+	2, 3, // Bottom-left
+	0, 1, // Top-right
+	0, 3, // Bottom-right
 
-	var vao uint32
-	gl.GenVertexArrays(1, &vao)
-	gl.BindVertexArray(vao)
+	// Left face
+	0, 3, // Bottom-left
+	2, 3, // Bottom-right
+	2, 1, // Top-right
+	0, 3, // Bottom-left
+	2, 1, // Top-right
+	0, 1, // Top-left
 
-	//position
-	gl.EnableVertexAttribArray(0)
-	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, 5*4, nil)
+	// Right face
+	0, 3, // Bottom-left
+	0, 1, // Top-left
+	2, 1, // Top-right
+	0, 3, // Bottom-left
+	2, 1, // Top-right
+	2, 3, // Bottom-right
 
-	// Enable vertex attribute array for texture coordinates (location 1)
-	gl.EnableVertexAttribArray(1)
-	// Define the texture coordinate data layout: 2 components (u, v)
-	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, 5*4, uintptr(3*4))
+	// Top face
+	0, 3, // Bottom-left
+	0, 1, // Bottom-right
+	2, 1, // Top-right
+	0, 3, // Bottom-left
+	2, 1, // Top-right
+	2, 3, // Top-left
 
-	return vao
+	// Bottom face
+	0, 3, // Bottom-left
+	2, 3, // Bottom-right
+	2, 1, // Top-right
+	0, 3, // Bottom-left
+	2, 1, // Top-right
+	0, 1, // Top-left
 }
 
-/*
-_, a := chunkData[mgl32.Vec3{key[0], key[1] + 1, key[2]}]
-
-	if a {
-		continue
-	}
-*/
 func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32) (uint32, uint32) {
 
 	var chunkVertices []float32
@@ -303,18 +364,20 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 		_, b := chunkData[blockPosition{key.x, key.y, key.z - 1}]
 		_, f := chunkData[blockPosition{key.x, key.y, key.z + 1}]
 
+		//block touching blocks on each side, won't be visible
 		if top && bot && l && r && b && f {
 			continue
 		}
 
-		for i := 0; i < len(cubeVertices); i += 5 {
+		for i := 0; i < len(cubeVertices); i += 3 {
 			x := cubeVertices[i] + float32(key.x)
 			y := cubeVertices[i+1] + float32(key.y)
 			z := cubeVertices[i+2] + float32(key.z)
-			u := cubeVertices[i+3]
-			v := cubeVertices[i+4]
+			uv := (i / 3) * 2
+			var u, v uint8 = cubeUVs[uv], cubeUVs[uv+1]
 
-			if i >= (0*30) && i <= (0*30)+25 {
+			//FRONT FACE
+			if i >= (0*18) && i <= (0*18)+15 {
 
 				if !f {
 
@@ -328,11 +391,13 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 						}
 					}
 
-					chunkVertices = append(chunkVertices, x, y, z, u, v)
+					textureUV := getTextureCoords(chunkData[key].blockType, 2)
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
 				}
 				continue
 			}
-			if i >= (1*30) && i <= (1*30)+25 {
+			//BACK FACE
+			if i >= (1*18) && i <= (1*18)+15 {
 
 				if !b {
 					if key.z == 0 {
@@ -343,11 +408,13 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 							continue
 						}
 					}
-					chunkVertices = append(chunkVertices, x, y, z, u, v)
+					textureUV := getTextureCoords(chunkData[key].blockType, 3)
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
 				}
 				continue
 			}
-			if i >= (2*30) && i <= (2*30)+25 {
+			//LEFT FACE
+			if i >= (2*18) && i <= (2*18)+15 {
 				if !l {
 					if key.x == 0 {
 						rowFront := row - 1
@@ -358,11 +425,13 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 						}
 					}
 
-					chunkVertices = append(chunkVertices, x, y, z, u, v)
+					textureUV := getTextureCoords(chunkData[key].blockType, 4)
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
 				}
 				continue
 			}
-			if i >= (3*30) && i <= (3*30)+25 {
+			//RIGHT FACE
+			if i >= (3*18) && i <= (3*18)+15 {
 
 				if !r {
 					if key.x == 15 {
@@ -373,24 +442,28 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 							continue
 						}
 					}
-					chunkVertices = append(chunkVertices, x, y, z, u, v)
+					textureUV := getTextureCoords(chunkData[key].blockType, 5)
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
 				}
 
 				continue
 			}
-			if i >= (4*30) && i <= (4*30)+25 {
+			//TOP FACE
+			if i >= (4*18) && i <= (4*18)+15 {
 				if !top {
-					chunkVertices = append(chunkVertices, x, y, z, u, v)
+					textureUV := getTextureCoords(chunkData[key].blockType, 0)
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
 				}
 				continue
 			}
-			if i >= (5*30) && i <= (5*30)+25 {
+			//BOTTOM FACE
+			if i >= (5*18) && i <= (5*18)+15 {
 				if !bot && key.y != -128 {
-					chunkVertices = append(chunkVertices, x, y, z, u, v)
+					textureUV := getTextureCoords(chunkData[key].blockType, 1)
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
 				}
 				continue
 			}
-			chunkVertices = append(chunkVertices, x, y, z, u, v)
 
 		}
 	}
@@ -413,7 +486,7 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 	// Define the texture coordinate data layout: 2 components (u, v)
 	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, 5*4, uintptr(3*4))
 
-	return vao, uint32(len(chunkVertices))
+	return vao, uint32(len(chunkVertices) / 5)
 }
 func initOpenGL() uint32 {
 	if err := gl.Init(); err != nil {
@@ -425,8 +498,8 @@ func initOpenGL() uint32 {
 	gl.FrontFace(gl.CCW)
 	gl.Enable(gl.DEPTH_TEST)
 
-	vertexShader := loadShader("shader.vert", gl.VERTEX_SHADER)
-	fragmentShader := loadShader("shader.frag", gl.FRAGMENT_SHADER)
+	vertexShader := loadShader("shaders/shader.vert", gl.VERTEX_SHADER)
+	fragmentShader := loadShader("shaders/shader.frag", gl.FRAGMENT_SHADER)
 	prog := gl.CreateProgram()
 	gl.AttachShader(prog, vertexShader)
 	gl.AttachShader(prog, fragmentShader)
@@ -448,37 +521,96 @@ func initViewMatrix() mgl32.Mat4 {
 
 	return mgl32.LookAtV(cameraPosition, direction, cameraUp)
 }
-func loadFont(pathToFont string) *freetype.Context {
+
+func loadFont(pathToFont string) (*freetype.Context, *image.RGBA) {
+	// Open the font file
 	file, err := os.Open(pathToFont)
 	if err != nil {
 		panic(err)
 	}
 	defer file.Close()
 
+	// Read the font data
 	fontData, err := io.ReadAll(file)
 	if err != nil {
 		panic(err)
 	}
+
+	// Parse the font
 	font, err := freetype.ParseFont(fontData)
 	if err != nil {
 		panic(err)
 	}
 
+	// Create a new RGBA image for the text destination
+	dst := image.NewRGBA(image.Rect(0, 0, 512, 512))
+
+	// Fill background with white
+	draw.Draw(dst, dst.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
+
+	// Create and configure the freetype context
 	ctx := freetype.NewContext()
 	ctx.SetFont(font)
-	ctx.SetFontSize(48)
-	dst := image.NewRGBA(image.Rect(0, 0, 512, 512))
-	ctx.SetDst(dst)
-	ctx.SetClip(dst.Bounds())
+	ctx.SetFontSize(48)       // Set font size
+	ctx.SetDst(dst)           // Set the destination image
+	ctx.SetClip(dst.Bounds()) // Clip to the full image bounds
+	ctx.SetSrc(image.Black)   // Set the text color
 
-	return ctx
+	return ctx, dst
 }
-func createText(ctx *freetype.Context, content string) {
-	pt := freetype.Pt(10, 10+int(ctx.PointToFixed(48)>>6)) // Adjust the vertical positioning
+
+func createText(ctx *freetype.Context, content string, dst *image.RGBA) {
+	// Calculate starting position for the text
+	pt := freetype.Pt(10, 10+int(ctx.PointToFixed(48)>>6))
+
+	// Draw the string on the destination image
 	_, err := ctx.DrawString(content, pt)
 	if err != nil {
 		panic(err)
 	}
+}
+
+func uploadTexture(img *image.RGBA) uint32 {
+	var texture uint32
+	gl.GenTextures(1, &texture)
+	gl.BindTexture(gl.TEXTURE_2D, texture)
+	gl.TexImage2D(
+		gl.TEXTURE_2D, 0, gl.RGBA, int32(img.Rect.Size().X), int32(img.Rect.Size().Y),
+		0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix),
+	)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	return texture
+}
+
+func createQuad() uint32 {
+	vertices := []float32{
+		// Positions    // Texture Coords
+		-1.0, 1.0, 0.0, 0.0, 1.0, // Top-left
+		-1.0, -1.0, 0.0, 0.0, 0.0, // Bottom-left
+		1.0, -1.0, 0.0, 1.0, 0.0, // Bottom-right
+
+		-1.0, 1.0, 0.0, 0.0, 1.0, // Top-left
+		1.0, -1.0, 0.0, 1.0, 0.0, // Bottom-right
+		1.0, 1.0, 0.0, 1.0, 1.0, // Top-right
+	}
+
+	var vao uint32
+	gl.GenVertexArrays(1, &vao)
+	gl.BindVertexArray(vao)
+
+	var vbo uint32
+	gl.GenBuffers(1, &vbo)
+	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
+	gl.BufferData(gl.ARRAY_BUFFER, len(vertices)*4, gl.Ptr(vertices), gl.STATIC_DRAW)
+
+	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, 5*4, nil)
+	gl.EnableVertexAttribArray(0)
+	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, 5*4, uintptr(3*4))
+	//gl.VertexAttribPointer(1, 2, gl.FLOAT, false, 5*4, gl.PtrOffset(3*4))
+	gl.EnableVertexAttribArray(1)
+
+	return vao
 }
 
 // in charge of rotation of the model
@@ -525,7 +657,8 @@ func loadShader(shaderFilePath string, shaderType uint32) uint32 {
 
 	return shader
 }
-func loadTexture(textureFilePath string) uint32 {
+
+func loadTextureAtlas(textureFilePath string) uint32 {
 
 	file, err := os.Open(textureFilePath)
 	if err != nil {
@@ -554,6 +687,17 @@ func loadTexture(textureFilePath string) uint32 {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 
 	return textureID
+}
+func getTextureCoords(blockID uint8, faceIndex uint8) []float32 {
+
+	// Calculate UV coordinates
+	u1 := float32(faceIndex*16) / float32(96)
+	v1 := float32(blockID*16) / float32(48)
+	u2 := float32((faceIndex+1)*16) / float32(96)
+	v2 := float32((blockID+1)*16) / float32(48)
+
+	return []float32{u1, v1, u2, v2}
+
 }
 func mouseCallback(window *glfw.Window, xPos, yPos float64) {
 	if firstMouse {
@@ -604,7 +748,9 @@ func movement(window *glfw.Window) {
 	if window.GetKey(glfw.KeyLeftShift) == glfw.Press {
 		movementSpeed = walkSpeed * 2
 	}
-
+	if window.GetKey(glfw.KeyF) == glfw.Press {
+		isFlying = !isFlying
+	}
 	if window.GetKey(glfw.KeyW) == glfw.Press {
 		velocity = velocity.Add(orientationFront.Mul(movementSpeed * deltaTime))
 	}
@@ -618,11 +764,11 @@ func movement(window *glfw.Window) {
 		velocity = velocity.Add(cameraRight.Mul(movementSpeed * deltaTime))
 	}
 	if window.GetKey(glfw.KeySpace) == glfw.Press {
-		/*
-			if !isOnGround {
-				return
-			}
-		*/
+
+		if !isOnGround && !isFlying {
+			return
+		}
+
 		velocity[1] += 20 * deltaTime
 	}
 	if window.GetKey(glfw.KeyLeftControl) == glfw.Press {
@@ -641,7 +787,7 @@ func Collider(time float32, normal []int) collider {
 }
 func collisions(chunks []chunkData) {
 	isOnGround = false
-	var playerWidth float32 = 1
+	var playerWidth float32 = 0.9
 
 	playerBox := AABB(
 		cameraPosition.Sub(mgl32.Vec3{playerWidth / 2, 1.7, playerWidth / 2}),
@@ -649,6 +795,8 @@ func collisions(chunks []chunkData) {
 	)
 	playerChunkX := int(math.Floor(float64(cameraPosition[0] / 16)))
 	playerChunkZ := int(math.Floor(float64(cameraPosition[2] / 16)))
+
+	pIntX, pIntY, pIntZ := int32(cameraPosition[0]), int32(cameraPosition[1]), int32(cameraPosition[2])
 
 	for x := -1; x <= 1; x++ {
 		for z := -1; z <= 1; z++ {
@@ -659,21 +807,29 @@ func collisions(chunks []chunkData) {
 				chunk := chunks[(newRow*int(numOfChunks))+newCol]
 				for i := 0; i < 3; i++ {
 					var colliders []collider
-					for key, _ := range chunk.blocksData {
-						floatBlockPos := mgl32.Vec3{float32(key.x), float32(key.y), float32(key.z)}
-						blockAABB := AABB(
-							floatBlockPos.Sub(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(chunk.pos.x), 0, float32(chunk.pos.z)}),
-							floatBlockPos.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(chunk.pos.x), 0, float32(chunk.pos.z)}),
-						)
+					for blockX := pIntX - 5; blockX < pIntX+5; blockX++ {
+						for blockZ := pIntZ - 5; blockZ < pIntZ+5; blockZ++ {
+							for blockY := pIntY - 5; blockY < pIntY+5; blockY++ {
+								if _, exists := chunk.blocksData[blockPosition{int8(blockX - chunk.pos.x), int16(blockY), int8(blockZ - chunk.pos.z)}]; exists {
+									key := blockPosition{int8(blockX - chunk.pos.x), int16(blockY), int8(blockZ - chunk.pos.z)}
+									floatBlockPos := mgl32.Vec3{float32(key.x), float32(key.y), float32(key.z)}
+									blockAABB := AABB(
+										floatBlockPos.Sub(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(chunk.pos.x), 0, float32(chunk.pos.z)}),
+										floatBlockPos.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(chunk.pos.x), 0, float32(chunk.pos.z)}),
+									)
 
-						entry, normal := collide(playerBox, blockAABB)
+									entry, normal := collide(playerBox, blockAABB)
 
-						if normal == nil {
-							continue
+									if normal == nil {
+										continue
+									}
+
+									colliders = append(colliders, Collider(entry, normal))
+								}
+							}
 						}
-
-						colliders = append(colliders, Collider(entry, normal))
 					}
+
 					if len(colliders) <= 0 {
 						break
 					}
@@ -805,7 +961,9 @@ func getCurrentChunkIndex() int {
 // ignores Y
 func velocityDamping(damping float32) {
 	velocity[0] *= (1 - damping)
-	velocity[1] *= (1 - damping)
+	if isFlying {
+		velocity[1] *= (1 - damping)
+	}
 	velocity[2] *= (1 - damping)
 }
 func main() {
@@ -830,7 +988,8 @@ func main() {
 	gl.UseProgram(program)
 
 	//glfw.SwapInterval(1)
-	var texture = loadTexture("faces.png")
+	var blockTextureAtlas = loadTextureAtlas("minecraftTextures.png")
+
 	//ctx := loadFont("path/to/font.ttf")
 
 	projection := initProjectionMatrix()
@@ -847,7 +1006,7 @@ func main() {
 	gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 
 	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, texture)
+	gl.BindTexture(gl.TEXTURE_2D, blockTextureAtlas)
 	gl.Uniform1i(textureLoc, 0)
 
 	var frameCount int = 0                   //for FPS display
@@ -856,20 +1015,29 @@ func main() {
 
 	var tickUpdateRate float32 = float32(1.0 / 120.0) //for ticks
 	var tickAccumulator float32
-	//var ticksFell int
+	var ticksFell int
 
 	for x := int32(0); x < numOfChunks; x++ {
 		for z := int32(0); z < numOfChunks; z++ {
 			chunks = append(chunks, chunk(chunkPosition{x * 16, z * 16}))
 		}
 	}
+
 	for i := range chunks {
 		row := int32(i) / numOfChunks
 		col := int32(i) % numOfChunks
-		vao, vertexCount := createChunkVAO(chunks[i].blocksData, row, col)
+		vao, trisCount := createChunkVAO(chunks[i].blocksData, row, col)
 		chunks[i].vao = vao
-		chunks[i].vertexCount = vertexCount
+		chunks[i].trisCount = trisCount
+
 	}
+	ctx, dst := loadFont("fonts/Mojang-Regular.ttf") // Replace with your .ttf file path
+	createText(ctx, "Hello, OpenGL!", dst)
+
+	//texture := uploadTexture(dst)
+
+	// Create quad
+	//textQuad := createQuad()
 
 	for !window.ShouldClose() {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -882,20 +1050,22 @@ func main() {
 		window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
 		//mouse look around
 		window.SetCursorPosCallback(mouseCallback)
-
+		movement(window)
 		for tickAccumulator >= tickUpdateRate {
-			/*
+			if !isFlying {
 				if isOnGround {
 					ticksFell = 0
 					velocity[1] -= 0.02 * deltaTime
 				} else {
 					ticksFell += 1
 					velocity[1] -= 0.04 * deltaTime * float32(ticksFell)
-				}*/
-			movement(window)
+				}
+			}
 			velocityDamping(0.2)
 
-			//collisions(chunks)
+			if !isFlying {
+				collisions(chunks)
+			}
 			cameraPosition = cameraPosition.Add(velocity)
 			tickAccumulator -= tickUpdateRate
 		}
@@ -918,6 +1088,10 @@ func main() {
 		viewLoc = gl.GetUniformLocation(program, gl.Str("view\x00"))
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
 
+		//gl.BindVertexArray(textQuad)
+		////gl.BindTexture(gl.TEXTURE_2D, texture)
+		//gl.DrawArrays(gl.TRIANGLES, 0, 6)
+
 		for _, chunk := range chunks {
 			// Generate model matrix with translation
 			model := mgl32.Translate3D(float32(chunk.pos.x), 0, float32(chunk.pos.z))
@@ -926,7 +1100,7 @@ func main() {
 
 			// Draw the cube
 			gl.BindVertexArray(chunk.vao)
-			gl.DrawArrays(gl.TRIANGLES, 0, int32(chunk.vertexCount))
+			gl.DrawArrays(gl.TRIANGLES, 0, int32(chunk.trisCount))
 		}
 
 		window.SwapBuffers()
