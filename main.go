@@ -1,6 +1,7 @@
 package main
 
 import (
+	"MinecraftGolang/config"
 	"fmt"
 	"image"
 	"image/color"
@@ -73,7 +74,7 @@ func fractalNoise3D(x int32, y int32, z int32, amplitude float32, scale float32)
 	y1 := float32(y)
 	z1 := float32(z)
 
-	val += noise.Eval3(x1/(scale+8), y1/scale, z1/(scale+8)) * amplitude
+	val += noise.Eval3(x1/scale, y1/scale, z1/scale) * amplitude
 
 	if val < -1 {
 		return -1
@@ -97,21 +98,21 @@ func chunk(pos chunkPosition) chunkData {
 			for y := int16(-128); y <= noiseValue; y++ {
 
 				//determine block type
-				blockType := grassID
+				blockType := GrassID
 				fluctuation := int16(random.Float32() * 5)
 				if y < ((noiseValue - 6) + fluctuation) {
-					blockType = dirtID
+					blockType = DirtID
 				}
 				if y < ((noiseValue - 10) + fluctuation) {
-					blockType = stoneID
+					blockType = StoneID
 				}
 				if y > 0 {
 					blocksData[blockPosition{x, y, z}] = blockData{
 						blockType: blockType,
 					}
 				} else {
-					isCave := fractalNoise3D(int32(x)+pos.x, int32(y), int32(z)+pos.z, 1, 10)
-					if isCave > -0.5 {
+					isCave := fractalNoise3D(int32(x)+pos.x, int32(y), int32(z)+pos.z, 0.7, 4)
+					if isCave < 0 {
 						blocksData[blockPosition{x, y, z}] = blockData{
 							blockType: blockType,
 						}
@@ -160,197 +161,24 @@ func AABB(min, max mgl32.Vec3) aabb {
 	return aabb{Min: min, Max: max}
 }
 
-func calculateOverlap(minA, maxA, minB, maxB float32) float32 {
-	if maxA <= minB || maxB <= minA {
-		return 0 // No overlap
-	}
-
-	if maxA > minB && maxA <= maxB {
-		return maxA - minB
-	}
-
-	if minA < maxB && minA >= minB {
-		return maxB - minA
-	}
-
-	return min(maxA-minB, maxB-minA)
-}
-func resolveCollision(a, b aabb) (mgl32.Vec3, bool) {
-	// Calculate overlaps on each axis
-	overlapX := calculateOverlap(a.Min.X(), a.Max.X(), b.Min.X(), b.Max.X())
-	overlapY := calculateOverlap(a.Min.Y(), a.Max.Y(), b.Min.Y(), b.Max.Y())
-	overlapZ := calculateOverlap(a.Min.Z(), a.Max.Z(), b.Min.Z(), b.Max.Z())
-
-	if overlapX == 0 || overlapY == 0 || overlapZ == 0 {
-		// No collision
-		return mgl32.Vec3{0, 0, 0}, false
-	}
-
-	// Special case for Y-axis (landing detection)
-	if overlapY < overlapX && overlapY < overlapZ {
-		if a.Min.Y() > b.Min.Y() {
-			// Player is above the block, snap to its surface
-			return mgl32.Vec3{0, overlapY, 0}, true
-		} else {
-			// Player hit the ceiling, prevent upward motion
-			return mgl32.Vec3{0, -overlapY, 0}, true
-		}
-	}
-
-	// Handle horizontal collisions (X or Z)
-	mtv := mgl32.Vec3{0, 0, 0}
-	minOverlap := overlapX
-	mtv[0] = minOverlap
-
-	if overlapZ < minOverlap {
-		mtv = mgl32.Vec3{0, 0, overlapZ}
-	}
-
-	if a.Min.X() < b.Min.X() {
-		mtv[0] = -mtv[0]
-	}
-	if a.Min.Z() < b.Min.Z() {
-		mtv[2] = -mtv[2]
-	}
-
-	return mtv, true
-}
-func (a aabb) intersects(b aabb) bool {
-	return a.Min.X() < b.Max.X() && a.Min.Y() < b.Max.Y() && a.Min.Z() < b.Max.Z() &&
-		a.Max.X() > b.Min.X() && a.Max.Y() > b.Min.Y() && a.Max.Z() > b.Min.Z()
-}
-
-var isFlying bool = true
-var isOnGround bool
-var velocity mgl32.Vec3 = mgl32.Vec3{0, 0, 0}
-var numOfChunks int32 = 15
-var noise = opensimplex.New32(123)
-var random = rand.New(rand.NewSource(123))
-var deltaTime float32
 var (
-	yaw        float64 = -90.0 // Horizontal angle initialized to look down -Z axis
-	pitch      float64 = 0.0
-	lastX      float64
-	lastY      float64
-	firstMouse bool = true
-
-	cameraPosition   = mgl32.Vec3{0.0, 25, 15}
-	cameraFront      = mgl32.Vec3{0.0, 0.0, -1.0}
-	orientationFront = mgl32.Vec3{0.0, 0.0, -1.0}
-
-	cameraUp    = mgl32.Vec3{0.0, 1.0, 0.0}
-	cameraRight = cameraFront.Cross(cameraUp)
-
-	walkSpeed     float32 = 4
-	movementSpeed float32 = 4
+	noise                    = opensimplex.New32(seed)
+	random                   = rand.New(rand.NewSource(seed))
+	yaw              float64 = -90.0
+	pitch            float64 = 0.0
+	lastX            float64
+	lastY            float64
+	firstMouse       bool = true
+	cameraPosition        = mgl32.Vec3{0.0, 25, 15}
+	cameraFront           = mgl32.Vec3{0.0, 0.0, -1.0}
+	orientationFront      = mgl32.Vec3{0.0, 0.0, -1.0}
+	cameraUp              = mgl32.Vec3{0.0, 1.0, 0.0}
+	cameraRight           = cameraFront.Cross(cameraUp)
+	velocity              = mgl32.Vec3{0, 0, 0}
+	deltaTime        float32
+	isOnGround       bool
+	isFlying         bool = true
 )
-
-var (
-	dirtID  uint8 = 0
-	grassID uint8 = 1
-	stoneID uint8 = 2
-)
-
-var cubeVertices []float32 = []float32{
-
-	// Front face
-	-0.5, -0.5, 0.5, // Bottom-left
-	0.5, -0.5, 0.5, // Bottom-right
-	0.5, 0.5, 0.5, // Top-right
-	-0.5, -0.5, 0.5, // Bottom-left
-	0.5, 0.5, 0.5, // Top-right
-	-0.5, 0.5, 0.5, // Top-left
-
-	// Back face
-	-0.5, -0.5, -0.5, // Bottom-left
-	-0.5, 0.5, -0.5, // Top-left
-	0.5, 0.5, -0.5, // Top-right
-	-0.5, -0.5, -0.5, // Bottom-left
-	0.5, 0.5, -0.5, // Top-right
-	0.5, -0.5, -0.5, // Bottom-right
-
-	// Left face
-	-0.5, -0.5, -0.5, // Bottom-left
-	-0.5, -0.5, 0.5, // Bottom-right
-	-0.5, 0.5, 0.5, // Top-right
-	-0.5, -0.5, -0.5, // Bottom-left
-	-0.5, 0.5, 0.5, // Top-right
-	-0.5, 0.5, -0.5, // Top-left
-
-	// Right face
-	0.5, -0.5, -0.5, // Bottom-left
-	0.5, 0.5, -0.5, // Top-left
-	0.5, 0.5, 0.5, // Top-right
-	0.5, -0.5, -0.5, // Bottom-left
-	0.5, 0.5, 0.5, // Top-right
-	0.5, -0.5, 0.5, // Bottom-right
-
-	// Top face
-	-0.5, 0.5, -0.5, // Bottom-left
-	-0.5, 0.5, 0.5, // Bottom-right
-	0.5, 0.5, 0.5, // Top-right
-	-0.5, 0.5, -0.5, // Bottom-left
-	0.5, 0.5, 0.5, // Top-right
-	0.5, 0.5, -0.5, // Top-left
-
-	// Bottom face
-	-0.5, -0.5, -0.5, // Bottom-left
-	0.5, -0.5, -0.5, // Bottom-right
-	0.5, -0.5, 0.5, // Top-right
-	-0.5, -0.5, -0.5, // Bottom-left
-	0.5, -0.5, 0.5, // Top-right
-	-0.5, -0.5, 0.5, // Top-left
-
-}
-var cubeUVs []uint8 = []uint8{
-	// Front face
-	0, 3, // Bottom-left
-	2, 3, // Bottom-right
-	2, 1, // Top-right
-	0, 3, // Bottom-left
-	2, 1, // Top-right
-	0, 1, // Top-left
-
-	// Back face
-	2, 3, // Bottom-left
-	2, 1, // Top-left
-	0, 1, // Top-right
-	2, 3, // Bottom-left
-	0, 1, // Top-right
-	0, 3, // Bottom-right
-
-	// Left face
-	0, 3, // Bottom-left
-	2, 3, // Bottom-right
-	2, 1, // Top-right
-	0, 3, // Bottom-left
-	2, 1, // Top-right
-	0, 1, // Top-left
-
-	// Right face
-	0, 3, // Bottom-left
-	0, 1, // Top-left
-	2, 1, // Top-right
-	0, 3, // Bottom-left
-	2, 1, // Top-right
-	2, 3, // Bottom-right
-
-	// Top face
-	0, 3, // Bottom-left
-	0, 1, // Bottom-right
-	2, 1, // Top-right
-	0, 3, // Bottom-left
-	2, 1, // Top-right
-	2, 3, // Top-left
-
-	// Bottom face
-	0, 3, // Bottom-left
-	2, 3, // Bottom-right
-	2, 1, // Top-right
-	0, 3, // Bottom-left
-	2, 1, // Top-right
-	0, 1, // Top-left
-}
 
 func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32) (uint32, uint32) {
 
@@ -369,12 +197,12 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 			continue
 		}
 
-		for i := 0; i < len(cubeVertices); i += 3 {
-			x := cubeVertices[i] + float32(key.x)
-			y := cubeVertices[i+1] + float32(key.y)
-			z := cubeVertices[i+2] + float32(key.z)
+		for i := 0; i < len(CubeVertices); i += 3 {
+			x := CubeVertices[i] + float32(key.x)
+			y := CubeVertices[i+1] + float32(key.y)
+			z := CubeVertices[i+2] + float32(key.z)
 			uv := (i / 3) * 2
-			var u, v uint8 = cubeUVs[uv], cubeUVs[uv+1]
+			var u, v uint8 = CubeUVs[uv], CubeUVs[uv+1]
 
 			//FRONT FACE
 			if i >= (0*18) && i <= (0*18)+15 {
@@ -383,9 +211,9 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 
 					if key.z == 15 {
 						rowFront := col + 1
-						adjustedRow := (numOfChunks * row)
+						adjustedRow := (config.NumOfChunks * row)
 
-						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+rowFront), 0, float64(numOfChunks*numOfChunks)-1))].blocksData[blockPosition{key.x, key.y, 0}]
+						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+rowFront), 0, float64(config.NumOfChunks*config.NumOfChunks)-1))].blocksData[blockPosition{key.x, key.y, 0}]
 						if blockAdjChunk {
 							continue
 						}
@@ -402,8 +230,8 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 				if !b {
 					if key.z == 0 {
 						rowFront := col - 1
-						adjustedRow := (numOfChunks * row)
-						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+rowFront), 0, float64(numOfChunks*numOfChunks)-1))].blocksData[blockPosition{key.x, key.y, 15}]
+						adjustedRow := (config.NumOfChunks * row)
+						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+rowFront), 0, float64(config.NumOfChunks*config.NumOfChunks)-1))].blocksData[blockPosition{key.x, key.y, 15}]
 						if blockAdjChunk {
 							continue
 						}
@@ -418,8 +246,8 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 				if !l {
 					if key.x == 0 {
 						rowFront := row - 1
-						adjustedRow := (numOfChunks * rowFront)
-						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+col), 0, float64(numOfChunks*numOfChunks)-1))].blocksData[blockPosition{15, key.y, key.z}]
+						adjustedRow := (config.NumOfChunks * rowFront)
+						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+col), 0, float64(config.NumOfChunks*config.NumOfChunks)-1))].blocksData[blockPosition{15, key.y, key.z}]
 						if blockAdjChunk {
 							continue
 						}
@@ -436,8 +264,8 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 				if !r {
 					if key.x == 15 {
 						rowFront := row + 1
-						adjustedRow := (numOfChunks * rowFront)
-						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+col), 0, float64(numOfChunks*numOfChunks)-1))].blocksData[blockPosition{0, key.y, key.z}]
+						adjustedRow := (config.NumOfChunks * rowFront)
+						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+col), 0, float64(config.NumOfChunks*config.NumOfChunks)-1))].blocksData[blockPosition{0, key.y, key.z}]
 						if blockAdjChunk {
 							continue
 						}
@@ -497,7 +325,7 @@ func initOpenGL() uint32 {
 	gl.CullFace(gl.BACK)
 	gl.FrontFace(gl.CCW)
 	gl.Enable(gl.DEPTH_TEST)
-
+	gl.Enable(gl.MULTISAMPLE)
 	vertexShader := loadShader("shaders/shader.vert", gl.VERTEX_SHADER)
 	fragmentShader := loadShader("shaders/shader.frag", gl.FRAGMENT_SHADER)
 	prog := gl.CreateProgram()
@@ -613,13 +441,6 @@ func createQuad() uint32 {
 	return vao
 }
 
-// in charge of rotation of the model
-func initModelMatrix() mgl32.Mat4 {
-	rotX := mgl32.HomogRotate3DX(0)
-	rotY := mgl32.HomogRotate3DY(0)
-	rotZ := mgl32.HomogRotate3DZ(0)
-	return rotZ.Mul4(rotY).Mul4(rotX)
-}
 func stringFromShaderFile(shaderFilePath string) string {
 	file, err := os.Open(shaderFilePath)
 	if err != nil {
@@ -744,9 +565,9 @@ func mouseCallback(window *glfw.Window, xPos, yPos float64) {
 }
 
 func movement(window *glfw.Window) {
-	movementSpeed = walkSpeed
+	movementSpeed := walkingSpeed
 	if window.GetKey(glfw.KeyLeftShift) == glfw.Press {
-		movementSpeed = walkSpeed * 2
+		movementSpeed = runningSpeed
 	}
 	if window.GetKey(glfw.KeyF) == glfw.Press {
 		isFlying = !isFlying
@@ -802,9 +623,9 @@ func collisions(chunks []chunkData) {
 		for z := -1; z <= 1; z++ {
 			newRow := playerChunkX + x
 			newCol := playerChunkZ + z
-			if newRow >= 0 && newRow < len(chunks)/int(numOfChunks) && newCol >= 0 && newCol < int(numOfChunks) {
+			if newRow >= 0 && newRow < len(chunks)/int(config.NumOfChunks) && newCol >= 0 && newCol < int(config.NumOfChunks) {
 
-				chunk := chunks[(newRow*int(numOfChunks))+newCol]
+				chunk := chunks[(newRow*int(config.NumOfChunks))+newCol]
 				for i := 0; i < 3; i++ {
 					var colliders []collider
 					for blockX := pIntX - 5; blockX < pIntX+5; blockX++ {
@@ -950,14 +771,6 @@ func collide(box1, box2 aabb) (float32, []int) {
 
 }
 
-func getCurrentChunkIndex() int {
-	//y * width + x
-	row := math.Floor(float64(cameraPosition[0] / 16))
-	column := math.Floor(float64(cameraPosition[2] / 16))
-	adjustedRow := (float64((numOfChunks)) * row)
-	return int(mgl64.Clamp(adjustedRow+column, 0, float64(numOfChunks)*float64(numOfChunks)))
-}
-
 // ignores Y
 func velocityDamping(damping float32) {
 	velocity[0] *= (1 - damping)
@@ -973,6 +786,9 @@ func main() {
 		panic(err)
 	}
 	defer glfw.Terminate()
+
+	glfw.WindowHint(glfw.Samples, 2)
+
 	glfw.WindowHint(glfw.ContextVersionMajor, 3)
 	glfw.WindowHint(glfw.ContextVersionMinor, 3)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
@@ -988,22 +804,24 @@ func main() {
 	gl.UseProgram(program)
 
 	//glfw.SwapInterval(1)
-	var blockTextureAtlas = loadTextureAtlas("minecraftTextures.png")
-
-	//ctx := loadFont("path/to/font.ttf")
+	var blockTextureAtlas = loadTextureAtlas("assets/textures/minecraftTextures.png")
 
 	projection := initProjectionMatrix()
 	view := initViewMatrix()
-	model := initModelMatrix()
+	//model := initModelMatrix()
+
+	//var test float32 = 15
 
 	projectionLoc := gl.GetUniformLocation(program, gl.Str("projection\x00"))
 	viewLoc := gl.GetUniformLocation(program, gl.Str("view\x00"))
-	modelLoc := gl.GetUniformLocation(program, gl.Str("model\x00"))
+	//modelLoc := gl.GetUniformLocation(program, gl.Str("model\x00"))
 	textureLoc := gl.GetUniformLocation(program, gl.Str("TexCoord\x00"))
+	//lightLevelLoc := gl.GetUniformLocation(program, gl.Str("lightLevel\x00"))
 
 	gl.UniformMatrix4fv(projectionLoc, 1, false, &projection[0])
 	gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
-	gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
+
+	//gl.UniformMatrix4fv(lightLevelLoc, 1, false, &test)
 
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D, blockTextureAtlas)
@@ -1017,21 +835,21 @@ func main() {
 	var tickAccumulator float32
 	var ticksFell int
 
-	for x := int32(0); x < numOfChunks; x++ {
-		for z := int32(0); z < numOfChunks; z++ {
+	for x := int32(0); x < config.NumOfChunks; x++ {
+		for z := int32(0); z < config.NumOfChunks; z++ {
 			chunks = append(chunks, chunk(chunkPosition{x * 16, z * 16}))
 		}
 	}
 
 	for i := range chunks {
-		row := int32(i) / numOfChunks
-		col := int32(i) % numOfChunks
+		row := int32(i) / config.NumOfChunks
+		col := int32(i) % config.NumOfChunks
 		vao, trisCount := createChunkVAO(chunks[i].blocksData, row, col)
 		chunks[i].vao = vao
 		chunks[i].trisCount = trisCount
 
 	}
-	ctx, dst := loadFont("fonts/Mojang-Regular.ttf") // Replace with your .ttf file path
+	ctx, dst := loadFont("assets/fonts/Mojang-Regular.ttf") // Replace with your .ttf file path
 	createText(ctx, "Hello, OpenGL!", dst)
 
 	//texture := uploadTexture(dst)
@@ -1075,9 +893,6 @@ func main() {
 		if timeElapsed >= (100 * time.Millisecond) {
 			var fps float64 = float64(frameCount) / timeElapsed.Seconds()
 			fmt.Printf("FPS: %.2f\n", fps)
-			//fmt.Printf("fps: %.2f\n", fps)
-			//index=row×cols+col
-			//fmt.Printf("POS: %.1f,%.1f,%.1f \n", cameraPosition[0], cameraPosition[1], cameraPosition[2])
 			frameCount = 0
 			startTime = currentTime
 
@@ -1087,10 +902,6 @@ func main() {
 		view = initViewMatrix()
 		viewLoc = gl.GetUniformLocation(program, gl.Str("view\x00"))
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
-
-		//gl.BindVertexArray(textQuad)
-		////gl.BindTexture(gl.TEXTURE_2D, texture)
-		//gl.DrawArrays(gl.TRIANGLES, 0, 6)
 
 		for _, chunk := range chunks {
 			// Generate model matrix with translation
@@ -1107,3 +918,11 @@ func main() {
 		frameCount++
 	}
 }
+
+/*
+To-do:
+
+Add text rendering!!
+Add basic lighting (no smooth yet)
+
+*/
