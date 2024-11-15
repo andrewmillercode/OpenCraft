@@ -1,3 +1,3 @@
 package config
 
-var NumOfChunks int32 = 5
+var NumOfChunks int32 = 8

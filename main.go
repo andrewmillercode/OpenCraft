@@ -106,15 +106,24 @@ func chunk(pos chunkPosition) chunkData {
 				if y < ((noiseValue - 10) + fluctuation) {
 					blockType = StoneID
 				}
-				if y > 0 {
+
+				//top most layer
+				if y == noiseValue {
 					blocksData[blockPosition{x, y, z}] = blockData{
-						blockType: blockType,
+						blockType:  blockType,
+						lightLevel: 15,
+					}
+				} else if y > 15 {
+					blocksData[blockPosition{x, y, z}] = blockData{
+						blockType:  blockType,
+						lightLevel: 0,
 					}
 				} else {
-					isCave := fractalNoise3D(int32(x)+pos.x, int32(y), int32(z)+pos.z, 0.7, 4)
+					isCave := fractalNoise3D(int32(x)+pos.x, int32(y), int32(z)+pos.z, 0.7, 8)
 					if isCave < 0 {
 						blocksData[blockPosition{x, y, z}] = blockData{
-							blockType: blockType,
+							blockType:  blockType,
+							lightLevel: 0,
 						}
 					}
 				}
@@ -122,6 +131,91 @@ func chunk(pos chunkPosition) chunkData {
 
 		}
 	}
+	//flood fill algorithm
+	//length = 16
+	//width = 16
+	//height = 128
+	//var q deque.Deque[]
+
+	/*
+			var q deque.Deque[string]
+		    q.PushBack("foo")
+		    q.PushBack("bar")
+		    q.PushBack("baz")
+
+		    fmt.Println(q.Len())   // Prints: 3
+		    fmt.Println(q.Front()) // Prints: foo
+		    fmt.Println(q.Back())  // Prints: baz
+
+		    q.PopFront() // remove "foo"
+		    q.PopBack()  // remove "baz"
+
+		    q.PushFront("hello")
+		    q.PushBack("world")
+
+		    // Consume deque and print elements.
+		    for q.Len() != 0 {
+		        fmt.Println(q.PopFront())
+		    }
+
+				from collections import deque
+
+			def floodFill(img, x, y, newClr):
+				q = deque()
+
+				# Rows and columns of the display
+				m = len(img)
+				n = len(img[0])
+
+				prevClr = img[x][y]
+				if prevClr == newClr:
+					return
+
+				# Append the position of the starting pixel
+				# of the component
+				q.append((x, y))
+				img[x][y] = newClr
+
+				# While the queue is not empty, i.e., the whole
+				# component having prevClr color
+				# is not colored with newClr color
+				while q:
+					# Dequeue the front node
+					x, y = q.popleft()
+
+					# Check if the adjacent pixels are valid and enqueue
+					if x + 1 < m and img[x + 1][y] == prevClr:
+						img[x + 1][y] = newClr
+						q.append((x + 1, y))
+					if x - 1 >= 0 and img[x - 1][y] == prevClr:
+						img[x - 1][y] = newClr
+						q.append((x - 1, y))
+					if y + 1 < n and img[x][y + 1] == prevClr:
+						img[x][y + 1] = newClr
+						q.append((x, y + 1))
+					if y - 1 >= 0 and img[x][y - 1] == prevClr:
+						img[x][y - 1] = newClr
+						q.append((x, y - 1))
+
+			# Driver code
+			img = [
+				[1, 1, 1],
+				[1, 1, 0],
+				[1, 0, 1]
+			]
+
+			x = 1
+			y = 1
+			newClr = 3
+
+			floodFill(img, x, y, newClr)
+
+			# Printing the updated img
+			for row in img:
+				print(' '.join(map(str, row)))
+
+	*/
+
 	/*
 		var caveNoiseScale float32 = 0.02
 		//caves?
@@ -184,7 +278,7 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 
 	var chunkVertices []float32
 	for key := range chunkData {
-
+		self := chunkData[blockPosition{key.x, key.y, key.z}]
 		_, top := chunkData[blockPosition{key.x, key.y + 1, key.z}]
 		_, bot := chunkData[blockPosition{key.x, key.y - 1, key.z}]
 		_, l := chunkData[blockPosition{key.x - 1, key.y, key.z}]
@@ -220,7 +314,7 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 					}
 
 					textureUV := getTextureCoords(chunkData[key].blockType, 2)
-					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel))
 				}
 				continue
 			}
@@ -237,7 +331,7 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 						}
 					}
 					textureUV := getTextureCoords(chunkData[key].blockType, 3)
-					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel))
 				}
 				continue
 			}
@@ -254,7 +348,7 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 					}
 
 					textureUV := getTextureCoords(chunkData[key].blockType, 4)
-					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel))
 				}
 				continue
 			}
@@ -271,7 +365,7 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 						}
 					}
 					textureUV := getTextureCoords(chunkData[key].blockType, 5)
-					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel))
 				}
 
 				continue
@@ -280,7 +374,8 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 			if i >= (4*18) && i <= (4*18)+15 {
 				if !top {
 					textureUV := getTextureCoords(chunkData[key].blockType, 0)
-					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
+
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel))
 				}
 				continue
 			}
@@ -288,7 +383,7 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 			if i >= (5*18) && i <= (5*18)+15 {
 				if !bot && key.y != -128 {
 					textureUV := getTextureCoords(chunkData[key].blockType, 1)
-					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v])
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel))
 				}
 				continue
 			}
@@ -307,13 +402,16 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 
 	//position
 	gl.EnableVertexAttribArray(0)
-	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, 5*4, nil)
+	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, 6*4, nil)
 
 	// Enable vertex attribute array for texture coordinates (location 1)
 	gl.EnableVertexAttribArray(1)
 	// Define the texture coordinate data layout: 2 components (u, v)
-	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, 5*4, uintptr(3*4))
+	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, 6*4, uintptr(3*4))
 
+	//light level
+	gl.EnableVertexAttribArray(2)
+	gl.VertexAttribPointerWithOffset(2, 1, gl.FLOAT, false, 6*4, uintptr(5*4))
 	return vao, uint32(len(chunkVertices) / 5)
 }
 func initOpenGL() uint32 {
@@ -787,13 +885,15 @@ func main() {
 	}
 	defer glfw.Terminate()
 
+	//Antialiasing
 	glfw.WindowHint(glfw.Samples, 2)
 
+	//OpenGL Version
 	glfw.WindowHint(glfw.ContextVersionMajor, 3)
 	glfw.WindowHint(glfw.ContextVersionMinor, 3)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
-	window, err := glfw.CreateWindow(1920, 1080, "Testing", nil, nil)
+	window, err := glfw.CreateWindow(1280, 720, "Minecraft in Go", nil, nil)
 
 	if err != nil {
 		panic(err)
@@ -803,12 +903,11 @@ func main() {
 	program := initOpenGL()
 	gl.UseProgram(program)
 
-	//glfw.SwapInterval(1)
+	glfw.SwapInterval(1)
 	var blockTextureAtlas = loadTextureAtlas("assets/textures/minecraftTextures.png")
 
 	projection := initProjectionMatrix()
 	view := initViewMatrix()
-	//model := initModelMatrix()
 
 	//var test float32 = 15
 
@@ -869,6 +968,7 @@ func main() {
 		//mouse look around
 		window.SetCursorPosCallback(mouseCallback)
 		movement(window)
+		//physics tick update
 		for tickAccumulator >= tickUpdateRate {
 			if !isFlying {
 				if isOnGround {
@@ -895,7 +995,6 @@ func main() {
 			fmt.Printf("FPS: %.2f\n", fps)
 			frameCount = 0
 			startTime = currentTime
-
 		}
 
 		//camera movement
