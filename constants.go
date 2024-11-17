@@ -1,7 +1,7 @@
 package main
 
 var (
-	seed int64 = 12
+	seed int64 = 1
 
 	runningSpeed float32 = 3
 	walkingSpeed float32 = 2
