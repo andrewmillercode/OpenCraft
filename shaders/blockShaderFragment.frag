@@ -6,16 +6,16 @@ in vec3 TextureTint;
 in vec2 OverlayCoord;
 out vec4 color;
 
-uniform sampler2D textureSampler;
+uniform sampler2D texture0;
 float light;
 void main() {
-    vec4 baseTexture = texture2D(textureSampler, TexCoord);
+    vec4 baseTexture = texture2D(texture0, TexCoord);
     light = (0.06 * LightLevel) + 0.06;
 
    
      if (OverlayCoord.x != 0){
         color = baseTexture;
-        vec4 overlayTexture = texture2D(textureSampler, OverlayCoord);
+        vec4 overlayTexture = texture2D(texture0, OverlayCoord);
         overlayTexture.rgb *= TextureTint;
         color = mix(color,overlayTexture,overlayTexture.a);
        

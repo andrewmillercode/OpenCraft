@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"os"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/go-gl/gl/v4.1-core/gl"
@@ -231,15 +232,22 @@ var (
 	lastX            float64
 	lastY            float64
 	firstMouse       bool = true
-	cameraPosition        = mgl32.Vec3{0.0, 25, 15}
-	cameraFront           = mgl32.Vec3{0.0, 0.0, -1.0}
-	orientationFront      = mgl32.Vec3{0.0, 0.0, -1.0}
-	cameraUp              = mgl32.Vec3{0.0, 1.0, 0.0}
-	cameraRight           = cameraFront.Cross(cameraUp)
-	velocity              = mgl32.Vec3{0, 0, 0}
+	movementSpeed    float32
+	cameraPosition   = mgl32.Vec3{0.0, 25, 15}
+	cameraFront      = mgl32.Vec3{0.0, 0.0, -1.0}
+	orientationFront = mgl32.Vec3{0.0, 0.0, -1.0}
+	cameraUp         = mgl32.Vec3{0.0, 1.0, 0.0}
+	cameraRight      = cameraFront.Cross(cameraUp)
+	velocity         = mgl32.Vec3{0, 0, 0}
 	deltaTime        float32
 	isOnGround       bool
-	isFlying         bool = true
+	jumpCooldown     float32 = 0
+	fps              float64
+	fpsString        string
+	frameCount       int       = 0
+	startTime        time.Time = time.Now() // for FPS display
+	isFlying         bool      = true
+	monitor          *glfw.Monitor
 )
 
 func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32) (uint32, uint32) {
@@ -425,7 +433,7 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 
 	return vao, uint32(len(chunkVertices) / 5)
 }
-func initOpenGL() uint32 {
+func initOpenGL3D() uint32 {
 	if err := gl.Init(); err != nil {
 		panic(err)
 	}
@@ -434,15 +442,44 @@ func initOpenGL() uint32 {
 	gl.CullFace(gl.BACK)
 	gl.FrontFace(gl.CCW)
 	gl.Enable(gl.DEPTH_TEST)
-	gl.Enable(gl.MULTISAMPLE)
+	//gl.Enable(gl.MULTISAMPLE)
 
-	vertexShader := loadShader("shaders/shader.vert", gl.VERTEX_SHADER)
-	fragmentShader := loadShader("shaders/shader.frag", gl.FRAGMENT_SHADER)
+	vertexShader := loadShader("shaders/blockShaderVertex.vert", gl.VERTEX_SHADER)
+	fragmentShader := loadShader("shaders/blockShaderFragment.frag", gl.FRAGMENT_SHADER)
 	prog := gl.CreateProgram()
+
+	//gl.ProgramParameteri(prog, gl.PROGRAM_SEPARABLE, gl.TRUE)
+
 	gl.AttachShader(prog, vertexShader)
 	gl.AttachShader(prog, fragmentShader)
 
 	gl.LinkProgram(prog)
+
+	gl.DetachShader(prog, vertexShader)
+	gl.DetachShader(prog, fragmentShader)
+
+	return prog
+}
+func initOpenGL2D() uint32 {
+	if err := gl.Init(); err != nil {
+		panic(err)
+	}
+	gl.Disable(gl.DEPTH_TEST)
+	gl.Disable(gl.CULL_FACE)
+	vertexShader := loadShader("shaders/textShaderVertex.vert", gl.VERTEX_SHADER)
+	fragmentShader := loadShader("shaders/textShaderFragment.frag", gl.FRAGMENT_SHADER)
+	prog := gl.CreateProgram()
+
+	//gl.ProgramParameteri(prog, gl.PROGRAM_SEPARABLE, gl.TRUE)
+
+	gl.AttachShader(prog, vertexShader)
+	gl.AttachShader(prog, fragmentShader)
+
+	gl.LinkProgram(prog)
+
+	gl.DetachShader(prog, vertexShader)
+	gl.DetachShader(prog, fragmentShader)
+
 	return prog
 }
 func initProjectionMatrix() mgl32.Mat4 {
@@ -484,7 +521,7 @@ func loadFont(pathToFont string) (*freetype.Context, *image.RGBA) {
 	dst := image.NewRGBA(image.Rect(0, 0, 512, 512))
 
 	// Fill background with white
-	draw.Draw(dst, dst.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
+	draw.Draw(dst, dst.Bounds(), &image.Uniform{C: color.Transparent}, image.Point{}, draw.Src)
 
 	// Create and configure the freetype context
 	ctx := freetype.NewContext()
@@ -492,46 +529,55 @@ func loadFont(pathToFont string) (*freetype.Context, *image.RGBA) {
 	ctx.SetFontSize(48)       // Set font size
 	ctx.SetDst(dst)           // Set the destination image
 	ctx.SetClip(dst.Bounds()) // Clip to the full image bounds
-	ctx.SetSrc(image.Black)   // Set the text color
+	ctx.SetSrc(image.White)   // Set the text color
+	ctx.SetHinting(2)
 
 	return ctx, dst
 }
 
-func createText(ctx *freetype.Context, content string, dst *image.RGBA) {
-	// Calculate starting position for the text
-	pt := freetype.Pt(10, 10+int(ctx.PointToFixed(48)>>6))
+type text struct {
+	VAO      uint32
+	Texture  uint32
+	Position mgl32.Vec2
+	Update   bool
+	FontSize float64
+	Content  interface{}
+}
+
+func createText(ctx *freetype.Context, content interface{}, fontSize float64, isUpdated bool, position mgl32.Vec2, dst *image.RGBA, program uint32) text {
+
+	ctx.SetFontSize(fontSize)
+	//X,Y
+	pt := freetype.Pt(int(position[0]), int(position[1])+int(ctx.PointToFixed(48)>>6))
 
 	// Draw the string on the destination image
-	_, err := ctx.DrawString(content, pt)
+	var err error
+
+	switch v := content.(type) {
+	case *string:
+		_, err = ctx.DrawString(*v, pt)
+	case string:
+		_, err = ctx.DrawString(v, pt)
+	}
+
 	if err != nil {
 		panic(err)
 	}
-}
 
-func uploadTexture(img *image.RGBA) uint32 {
-	var texture uint32
-	gl.GenTextures(1, &texture)
-	gl.BindTexture(gl.TEXTURE_2D, texture)
-	gl.TexImage2D(
-		gl.TEXTURE_2D, 0, gl.RGBA, int32(img.Rect.Size().X), int32(img.Rect.Size().Y),
-		0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix),
-	)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	return texture
-}
-
-func createQuad() uint32 {
 	vertices := []float32{
 		// Positions    // Texture Coords
-		-1.0, 1.0, 0.0, 0.0, 1.0, // Top-left
-		-1.0, -1.0, 0.0, 0.0, 0.0, // Bottom-left
-		1.0, -1.0, 0.0, 1.0, 0.0, // Bottom-right
+		0.0, 1.0, 0.0, 0.0, 1.0, // Top-left
+		0.0, 0.0, 0.0, 0.0, 0.0, // Bottom-left
+		1.0, 0.0, 0.0, 1.0, 0.0, // Bottom-right
 
-		-1.0, 1.0, 0.0, 0.0, 1.0, // Top-left
-		1.0, -1.0, 0.0, 1.0, 0.0, // Bottom-right
+		0.0, 1.0, 0.0, 0.0, 1.0, // Top-left
+		1.0, 0.0, 0.0, 1.0, 0.0, // Bottom-right
 		1.0, 1.0, 0.0, 1.0, 1.0, // Top-right
 	}
+	textTexture := uploadTexture(dst)
+	gl.BindTexture(gl.TEXTURE_2D, textTexture) // Upload text as a texture
+	textureLoc2D := gl.GetUniformLocation(program, gl.Str("TexCoord\x00"))
+	gl.Uniform1i(textureLoc2D, 0)
 
 	var vao uint32
 	gl.GenVertexArrays(1, &vao)
@@ -541,14 +587,36 @@ func createQuad() uint32 {
 	gl.GenBuffers(1, &vbo)
 	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
 	gl.BufferData(gl.ARRAY_BUFFER, len(vertices)*4, gl.Ptr(vertices), gl.STATIC_DRAW)
-
-	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, 5*4, nil)
 	gl.EnableVertexAttribArray(0)
-	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, 5*4, uintptr(3*4))
-	//gl.VertexAttribPointer(1, 2, gl.FLOAT, false, 5*4, gl.PtrOffset(3*4))
+	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, 5*4, nil)
 	gl.EnableVertexAttribArray(1)
+	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, 5*4, uintptr(3*4))
 
-	return vao
+	return text{
+		VAO:      vao,
+		Texture:  textTexture,
+		Position: position,
+		Update:   isUpdated,
+		Content:  content,
+		FontSize: fontSize,
+	}
+
+}
+
+func uploadTexture(img *image.RGBA) uint32 {
+	var texture uint32
+	gl.GenTextures(1, &texture)
+	gl.BindTexture(gl.TEXTURE_2D, texture)
+	gl.TexImage2D(
+		gl.TEXTURE_2D, 0, gl.RGBA,
+		int32(img.Rect.Size().X), int32(img.Rect.Size().Y),
+		0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix),
+	)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+	return texture
 }
 
 func stringFromShaderFile(shaderFilePath string) string {
@@ -600,7 +668,6 @@ func loadTextureAtlas(textureFilePath string) uint32 {
 	var textureID uint32
 	gl.GenTextures(1, &textureID)
 	gl.BindTexture(gl.TEXTURE_2D, textureID)
-
 	imageFile, err := png.Decode(file)
 	if err != nil {
 		panic(err)
@@ -616,8 +683,9 @@ func loadTextureAtlas(textureFilePath string) uint32 {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	//gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_ANISOTROPY, gl.MAX_TEXTURE_MAX_ANISOTROPY)
+	var maxAnisotropy int32
+	gl.GetIntegerv(gl.MAX_TEXTURE_MAX_ANISOTROPY, &maxAnisotropy)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_ANISOTROPY, maxAnisotropy)
 	return textureID
 }
 func getTextureCoords(blockID uint8, faceIndex uint8) []float32 {
@@ -675,13 +743,37 @@ func mouseCallback(window *glfw.Window, xPos, yPos float64) {
 	cameraUp = cameraRight.Cross(cameraFront).Normalize()
 }
 
-func movement(window *glfw.Window) {
-	movementSpeed := walkingSpeed
-	if window.GetKey(glfw.KeyLeftShift) == glfw.Press {
-		movementSpeed = runningSpeed
+func input(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+
+	if action == glfw.Press {
+		if key == glfw.KeyF {
+			isFlying = !isFlying
+		}
+		if key == glfw.KeyF11 {
+			if monitor == nil {
+				//set to fullscreen
+				monitor = glfw.GetPrimaryMonitor()
+				window.SetMonitor(monitor, 0, 0, monitor.GetVideoMode().Width, monitor.GetVideoMode().Height, monitor.GetVideoMode().RefreshRate)
+			} else {
+				//set to windowed
+				oX, oY := monitor.GetVideoMode().Width, monitor.GetVideoMode().Height
+				monitor = nil
+				window.SetMonitor(monitor, (oX/2)-(1600/2), (oY/2)-(900/2), 1600, 900, 0)
+			}
+		}
 	}
-	if window.GetKey(glfw.KeyF) == glfw.Press {
-		isFlying = !isFlying
+
+}
+func movement(window *glfw.Window) {
+	movementSpeed = walkingSpeed
+	if isFlying {
+		movementSpeed = flyingSpeed
+		if window.GetKey(glfw.KeySpace) == glfw.Press {
+			velocity[1] += 15 * deltaTime
+		}
+		if window.GetKey(glfw.KeyLeftControl) == glfw.Press {
+			velocity[1] -= movementSpeed * deltaTime
+		}
 	}
 	if window.GetKey(glfw.KeyW) == glfw.Press {
 		velocity = velocity.Add(orientationFront.Mul(movementSpeed * deltaTime))
@@ -696,17 +788,14 @@ func movement(window *glfw.Window) {
 		velocity = velocity.Add(cameraRight.Mul(movementSpeed * deltaTime))
 	}
 	if window.GetKey(glfw.KeySpace) == glfw.Press {
-
-		if !isOnGround && !isFlying {
+		if !isOnGround || jumpCooldown != 0 {
 			return
 		}
+		jumpCooldown = 0.05
+		fmt.Print("jumped")
+		velocity[1] += 15 * deltaTime
 
-		velocity[1] += 20 * deltaTime
 	}
-	if window.GetKey(glfw.KeyLeftControl) == glfw.Press {
-		velocity[1] -= movementSpeed * deltaTime
-	}
-
 }
 
 type collider struct {
@@ -725,6 +814,7 @@ func collisions(chunks []chunkData) {
 		cameraPosition.Sub(mgl32.Vec3{playerWidth / 2, 1.7, playerWidth / 2}),
 		cameraPosition.Add(mgl32.Vec3{playerWidth / 2, 0.25, playerWidth / 2}),
 	)
+
 	playerChunkX := int(math.Floor(float64(cameraPosition[0] / 16)))
 	playerChunkZ := int(math.Floor(float64(cameraPosition[2] / 16)))
 
@@ -739,9 +829,9 @@ func collisions(chunks []chunkData) {
 				chunk := chunks[(newRow*int(config.NumOfChunks))+newCol]
 				for i := 0; i < 3; i++ {
 					var colliders []collider
-					for blockX := pIntX - 5; blockX < pIntX+5; blockX++ {
-						for blockZ := pIntZ - 5; blockZ < pIntZ+5; blockZ++ {
-							for blockY := pIntY - 5; blockY < pIntY+5; blockY++ {
+					for blockX := pIntX - 3; blockX < pIntX+3; blockX++ {
+						for blockZ := pIntZ - 3; blockZ < pIntZ+3; blockZ++ {
+							for blockY := pIntY - 3; blockY < pIntY+3; blockY++ {
 								if _, exists := chunk.blocksData[blockPosition{int8(blockX - chunk.pos.x), int16(blockY), int8(blockZ - chunk.pos.z)}]; exists {
 									key := blockPosition{int8(blockX - chunk.pos.x), int16(blockY), int8(blockZ - chunk.pos.z)}
 									floatBlockPos := mgl32.Vec3{float32(key.x), float32(key.y), float32(key.z)}
@@ -784,6 +874,8 @@ func collisions(chunks []chunkData) {
 						velocity[1] = 0
 						if minEntry >= 0 {
 							isOnGround = true
+						} else {
+							isOnGround = false
 						}
 						cameraPosition[1] += velocity.Y() * minEntry
 					}
@@ -890,6 +982,59 @@ func velocityDamping(damping float32) {
 	}
 	velocity[2] *= (1 - damping)
 }
+func clearImage(img *image.RGBA) {
+	for i := range img.Pix {
+		img.Pix[i] = 0
+	}
+}
+func updateTextTexture(newContent interface{}, obj *text, ctx *freetype.Context, dst *image.RGBA) {
+	// Clear the image
+	clearImage(dst)
+	ctx.SetFontSize(obj.FontSize)
+	// Render new text content
+	pt := freetype.Pt(int(obj.Position[0]), int(obj.Position[1])+int(ctx.PointToFixed(48)>>6))
+
+	var err error
+
+	switch v := newContent.(type) {
+	case *string:
+		_, err = ctx.DrawString(*v, pt)
+	case string:
+		_, err = ctx.DrawString(v, pt)
+	}
+
+	if err != nil {
+		panic(err)
+	}
+
+	gl.BindTexture(gl.TEXTURE_2D, obj.Texture)
+	gl.TexSubImage2D(
+		gl.TEXTURE_2D,
+		0,    // Mipmap level
+		0, 0, // Offset in the texture
+		int32(dst.Rect.Size().X), // Width of the updated area
+		int32(dst.Rect.Size().Y), // Height of the updated area
+		gl.RGBA,                  // Format (match with original)
+		gl.UNSIGNED_BYTE,         // Data type (match with original)
+		gl.Ptr(dst.Pix),          // New pixel data
+	)
+
+}
+
+func updateFPS() {
+	var currentTime time.Time = time.Now()
+	var timeElapsed time.Duration = currentTime.Sub(startTime)
+
+	if timeElapsed >= (100 * time.Millisecond) {
+		fps = float64(frameCount) / timeElapsed.Seconds()
+		fpsString = "FPS: " + strconv.FormatFloat(mgl64.Round(fps, 2), 'f', -1, 32)
+		frameCount = 0
+		startTime = currentTime
+	}
+}
+func OnWindowResize(w *glfw.Window, width int, height int) {
+	gl.Viewport(0, 0, int32(width), int32(height))
+}
 func main() {
 	runtime.LockOSThread()
 	err := glfw.Init()
@@ -899,54 +1044,51 @@ func main() {
 	defer glfw.Terminate()
 
 	//Antialiasing
-	glfw.WindowHint(glfw.Samples, 2)
+	//glfw.WindowHint(glfw.Samples, 2)
 
 	//OpenGL Version
 	glfw.WindowHint(glfw.ContextVersionMajor, 3)
 	glfw.WindowHint(glfw.ContextVersionMinor, 3)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
-	window, err := glfw.CreateWindow(1280, 720, "Minecraft in Go", nil, nil)
+
+	//monitor = glfw.GetPrimaryMonitor()
+
+	window, err := glfw.CreateWindow(1600, 900, "Minecraft in Go", nil, nil)
+	window.SetAspectRatio(16, 9)
 
 	if err != nil {
 		panic(err)
 	}
 
 	window.MakeContextCurrent()
-	program := initOpenGL()
-	gl.UseProgram(program)
+	window.SetFramebufferSizeCallback(OnWindowResize)
+	//glfw.SwapInterval(1)
 
-	glfw.SwapInterval(1)
+	opengl3d := initOpenGL3D()
+	gl.Enable(gl.BLEND)
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	gl.UseProgram(opengl3d)
+
+	gl.ActiveTexture(gl.TEXTURE0)
 	var blockTextureAtlas = loadTextureAtlas("assets/textures/minecraftTextures.png")
+	gl.BindTexture(gl.TEXTURE_2D, blockTextureAtlas)
+	textureLoc := gl.GetUniformLocation(opengl3d, gl.Str("TexCoord\x00"))
+	gl.Uniform1i(textureLoc, 0)
 
 	projection := initProjectionMatrix()
 	view := initViewMatrix()
-
-	//var test float32 = 15
-
-	projectionLoc := gl.GetUniformLocation(program, gl.Str("projection\x00"))
-	viewLoc := gl.GetUniformLocation(program, gl.Str("view\x00"))
-	textureLoc := gl.GetUniformLocation(program, gl.Str("TexCoord\x00"))
+	projectionLoc := gl.GetUniformLocation(opengl3d, gl.Str("projection\x00"))
+	viewLoc := gl.GetUniformLocation(opengl3d, gl.Str("view\x00"))
 
 	gl.UniformMatrix4fv(projectionLoc, 1, false, &projection[0])
 	gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
 
-	//gl.UniformMatrix4fv(lightLevelLoc, 1, false, &test)
-
-	gl.ActiveTexture(gl.TEXTURE0)
-
-	gl.BindTexture(gl.TEXTURE_2D, blockTextureAtlas)
-	//gl.GenerateTextureMipmap(blockTextureAtlas)
-
-	gl.Uniform1i(textureLoc, 0)
-
-	var frameCount int = 0                   //for FPS display
-	var startTime time.Time = time.Now()     // for FPS display
 	var previousFrame time.Time = time.Now() // for deltatime
 
 	var tickUpdateRate float32 = float32(1.0 / 120.0) //for ticks
 	var tickAccumulator float32
-	var ticksFell int
+	var distanceFell float32
 
 	for x := int32(0); x < config.NumOfChunks; x++ {
 		for z := int32(0); z < config.NumOfChunks; z++ {
@@ -962,13 +1104,24 @@ func main() {
 		chunks[i].trisCount = trisCount
 
 	}
-	ctx, dst := loadFont("assets/fonts/Mojang-Regular.ttf") // Replace with your .ttf file path
-	createText(ctx, "Hello, OpenGL!", dst)
 
-	//texture := uploadTexture(dst)
+	opengl2d := initOpenGL2D()
+	gl.UseProgram(opengl2d)
 
-	// Create quad
-	//textQuad := createQuad()
+	ctx, dst := loadFont("assets/fonts/Mojang-Regular.ttf")
+
+	// Set up orthographic projection for 2D (UI)
+	orthographicProjection := mgl32.Ortho(0, 1600, 900, 0, -1, 1)
+	projectionLoc2D := gl.GetUniformLocation(opengl2d, gl.Str("projection\x00"))
+	gl.UniformMatrix4fv(projectionLoc2D, 1, false, &orthographicProjection[0])
+	var textObjects []text
+	text1 := createText(ctx, &fpsString, 24, true, mgl32.Vec2{10, 400}, dst, opengl2d)
+	text2 := createText(ctx, "World!", 48, false, mgl32.Vec2{100, 100}, dst, opengl2d)
+
+	textObjects = append(textObjects, text1)
+	textObjects = append(textObjects, text2)
+	//textVao, textTexture := createText(ctx, "Testttt", dst, opengl2d)
+
 	initialized := false
 	for !window.ShouldClose() {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -981,16 +1134,22 @@ func main() {
 		window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
 		//mouse look around
 		window.SetCursorPosCallback(mouseCallback)
+		window.SetKeyCallback(input)
 		movement(window)
 		//physics tick update
+		updateFPS()
 		for tickAccumulator >= tickUpdateRate {
 			if !isFlying {
 				if isOnGround {
-					ticksFell = 0
+
+					distanceFell = 0
 					velocity[1] -= 0.02 * deltaTime
 				} else {
-					ticksFell += 1
-					velocity[1] -= 0.04 * deltaTime * float32(ticksFell)
+					distanceFell += 0.05
+					if distanceFell > 1.25 {
+						distanceFell = 1.25
+					}
+					velocity[1] -= 0.22 * deltaTime * (1 + distanceFell)
 				}
 			}
 			velocityDamping(0.2)
@@ -998,33 +1157,60 @@ func main() {
 			if !isFlying {
 				collisions(chunks)
 			}
+			if jumpCooldown > 0.01 {
+				jumpCooldown -= 0.01
+			} else {
+				jumpCooldown = 0
+			}
 			cameraPosition = cameraPosition.Add(velocity)
 			tickAccumulator -= tickUpdateRate
 		}
-		/*
-			var currentTime time.Time = time.Now()
-			var timeElapsed time.Duration = currentTime.Sub(startTime)
-			if timeElapsed >= (100 * time.Millisecond) {
-				//var fps float64 = float64(frameCount) / timeElapsed.Seconds()
-				//fmt.Printf("FPS: %.2f\n", fps)
-				frameCount = 0
-				startTime = currentTime
-			}
-		*/
-		//camera movement
+
+		gl.Enable(gl.CULL_FACE)
+		gl.Enable(gl.DEPTH_TEST)
+
+		gl.UseProgram(opengl3d)
+		gl.BindTexture(gl.TEXTURE_2D, blockTextureAtlas)
+		gl.Uniform1i(textureLoc, 0)
+
 		view = initViewMatrix()
-		viewLoc = gl.GetUniformLocation(program, gl.Str("view\x00"))
+		viewLoc = gl.GetUniformLocation(opengl3d, gl.Str("view\x00"))
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
 
 		for _, chunk := range chunks {
 			// Generate model matrix with translation
 			model := mgl32.Translate3D(float32(chunk.pos.x), 0, float32(chunk.pos.z))
-			modelLoc := gl.GetUniformLocation(program, gl.Str("model\x00"))
+			modelLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
 			gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 
 			// Draw the cube
 			gl.BindVertexArray(chunk.vao)
 			gl.DrawArrays(gl.TRIANGLES, 0, int32(chunk.trisCount))
+		}
+
+		//UI RENDERING STAGE
+		gl.Disable(gl.DEPTH_TEST)
+		gl.Disable(gl.CULL_FACE)
+
+		gl.UseProgram(opengl2d)
+
+		textureLoc2D := gl.GetUniformLocation(opengl2d, gl.Str("TexCoord\x00"))
+		gl.Uniform1i(textureLoc2D, 0)
+
+		orthographicProjection := mgl32.Ortho(0, 1600, 900, 0, -1, 1)
+		projectionLoc2D := gl.GetUniformLocation(opengl2d, gl.Str("projection\x00"))
+		gl.UniformMatrix4fv(projectionLoc2D, 1, false, &orthographicProjection[0])
+
+		for i, obj := range textObjects {
+			model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0).Mul4(mgl32.Scale3D(512, 512, 1))
+			modelLoc := gl.GetUniformLocation(opengl2d, gl.Str("model\x00"))
+			gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
+			if obj.Update {
+				updateTextTexture(obj.Content, &textObjects[i], ctx, dst)
+			}
+			gl.BindTexture(gl.TEXTURE_2D, obj.Texture)
+			gl.BindVertexArray(obj.VAO)
+			gl.DrawArrays(gl.TRIANGLES, 0, 6) // Assuming each text uses 6 vertices
 		}
 
 		window.SwapBuffers()

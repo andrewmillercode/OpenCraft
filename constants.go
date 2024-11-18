@@ -3,8 +3,9 @@ package main
 var (
 	seed int64 = 1
 
-	runningSpeed float32 = 3
-	walkingSpeed float32 = 2
+	runningSpeed float32 = 1.8
+	flyingSpeed  float32 = 4
+	walkingSpeed float32 = 1.425
 )
 var (
 	DirtID  uint8 = 0
