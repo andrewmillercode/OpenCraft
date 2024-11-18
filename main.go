@@ -225,29 +225,32 @@ func AABB(min, max mgl32.Vec3) aabb {
 }
 
 var (
-	noise                    = opensimplex.New32(seed)
-	random                   = rand.New(rand.NewSource(seed))
-	yaw              float64 = -90.0
-	pitch            float64 = 0.0
-	lastX            float64
-	lastY            float64
-	firstMouse       bool = true
-	movementSpeed    float32
-	cameraPosition   = mgl32.Vec3{0.0, 25, 15}
-	cameraFront      = mgl32.Vec3{0.0, 0.0, -1.0}
-	orientationFront = mgl32.Vec3{0.0, 0.0, -1.0}
-	cameraUp         = mgl32.Vec3{0.0, 1.0, 0.0}
-	cameraRight      = cameraFront.Cross(cameraUp)
-	velocity         = mgl32.Vec3{0, 0, 0}
-	deltaTime        float32
-	isOnGround       bool
-	jumpCooldown     float32 = 0
-	fps              float64
-	fpsString        string
-	frameCount       int       = 0
-	startTime        time.Time = time.Now() // for FPS display
-	isFlying         bool      = true
-	monitor          *glfw.Monitor
+	noise                        = opensimplex.New32(seed)
+	random                       = rand.New(rand.NewSource(seed))
+	yaw                  float64 = -90.0
+	pitch                float64 = 0.0
+	lastX                float64
+	lastY                float64
+	firstMouse           bool = true
+	movementSpeed        float32
+	cameraPosition       = mgl32.Vec3{0.0, 25, 15}
+	cameraPositionLerped = cameraPosition
+	cameraFront          = mgl32.Vec3{0.0, 0.0, -1.0}
+	orientationFront     = mgl32.Vec3{0.0, 0.0, -1.0}
+	cameraUp             = mgl32.Vec3{0.0, 1.0, 0.0}
+	cameraRight          = cameraFront.Cross(cameraUp)
+	velocity             = mgl32.Vec3{0, 0, 0}
+	deltaTime            float32
+	isOnGround           bool
+	isSprinting          bool
+	jumpCooldown         float32 = 0
+	fps                  float64
+	fpsString            string
+	frameCount           int       = 0
+	startTime            time.Time = time.Now() // for FPS display
+	isFlying             bool      = true
+
+	monitor *glfw.Monitor
 )
 
 func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32) (uint32, uint32) {
@@ -492,9 +495,9 @@ func initProjectionMatrix() mgl32.Mat4 {
 }
 func initViewMatrix() mgl32.Mat4 {
 
-	direction := cameraPosition.Add(cameraFront)
+	direction := cameraPositionLerped.Add(cameraFront)
 
-	return mgl32.LookAtV(cameraPosition, direction, cameraUp)
+	return mgl32.LookAtV(cameraPositionLerped, direction, cameraUp)
 }
 
 func loadFont(pathToFont string) (*freetype.Context, *image.RGBA) {
@@ -711,7 +714,7 @@ func mouseCallback(window *glfw.Window, xPos, yPos float64) {
 	lastX = xPos
 	lastY = yPos
 
-	sensitivity := 0.5
+	sensitivity := 0.3
 	xoffset *= sensitivity
 	yoffset *= sensitivity
 
@@ -762,6 +765,13 @@ func input(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, 
 			}
 		}
 	}
+	if action == glfw.Release {
+		if key == glfw.KeyLeftShift {
+			if isSprinting {
+				isSprinting = false
+			}
+		}
+	}
 
 }
 func movement(window *glfw.Window) {
@@ -774,6 +784,10 @@ func movement(window *glfw.Window) {
 		if window.GetKey(glfw.KeyLeftControl) == glfw.Press {
 			velocity[1] -= movementSpeed * deltaTime
 		}
+	}
+	if window.GetKey(glfw.KeyLeftShift) == glfw.Press {
+		movementSpeed = runningSpeed
+		isSprinting = true
 	}
 	if window.GetKey(glfw.KeyW) == glfw.Press {
 		velocity = velocity.Add(orientationFront.Mul(movementSpeed * deltaTime))
@@ -792,8 +806,7 @@ func movement(window *glfw.Window) {
 			return
 		}
 		jumpCooldown = 0.05
-		fmt.Print("jumped")
-		velocity[1] += 15 * deltaTime
+		velocity[1] += (jumpHeight * 33) * deltaTime
 
 	}
 }
@@ -811,7 +824,7 @@ func collisions(chunks []chunkData) {
 	var playerWidth float32 = 0.9
 
 	playerBox := AABB(
-		cameraPosition.Sub(mgl32.Vec3{playerWidth / 2, 1.7, playerWidth / 2}),
+		cameraPosition.Sub(mgl32.Vec3{playerWidth / 2, 1.5, playerWidth / 2}),
 		cameraPosition.Add(mgl32.Vec3{playerWidth / 2, 0.25, playerWidth / 2}),
 	)
 
@@ -864,24 +877,28 @@ func collisions(chunks []chunkData) {
 						}
 					}
 
-					minEntry -= 0.01
+					minEntry -= 0.001
+					if len(minNormal) > 0 {
+						if minNormal[0] != 0 {
 
-					if len(minNormal) > 0 && minNormal[0] != 0 {
-						velocity[0] = 0
-						cameraPosition[0] += velocity.X() * minEntry
-					}
-					if len(minNormal) > 0 && minNormal[1] != 0 {
-						velocity[1] = 0
-						if minEntry >= 0 {
-							isOnGround = true
-						} else {
-							isOnGround = false
+							cameraPosition[0] += velocity.X() * minEntry
+							velocity[0] = 0
 						}
-						cameraPosition[1] += velocity.Y() * minEntry
-					}
-					if len(minNormal) > 0 && minNormal[2] != 0 {
-						velocity[2] = 0
-						cameraPosition[2] += velocity.Z() * minEntry
+						if minNormal[1] != 0 {
+
+							cameraPosition[1] += velocity.Y() * minEntry
+							velocity[1] = 0
+
+							if minNormal[1] >= 0 {
+								isOnGround = true
+							}
+
+						}
+						if minNormal[2] != 0 {
+
+							cameraPosition[2] += velocity.Z() * minEntry
+							velocity[2] = 0
+						}
 					}
 				}
 
@@ -890,7 +907,6 @@ func collisions(chunks []chunkData) {
 
 	}
 
-	//cameraPosition = cameraPosition.Add(velocity)
 }
 func getTime(x float32, y float32) float32 {
 	if y == 0 {
@@ -974,13 +990,24 @@ func collide(box1, box2 aabb) (float32, []int) {
 
 }
 
-// ignores Y
 func velocityDamping(damping float32) {
-	velocity[0] *= (1 - damping)
-	if isFlying {
-		velocity[1] *= (1 - damping)
+	dampenVert := ((1.0 - damping) * deltaTime * 250)
+	dampenHoriz := ((1.0 - damping) * deltaTime * 250)
+	airMultiplier := float32(0.93) //In Air (while jumping, etc) horizontal resistance 7% decrease
+	sprintMultiplier := float32(2) // sprint jump = 14% decrease
+	if !isOnGround {
+		dampenHoriz = ((1.0 - (damping * airMultiplier)) * deltaTime * 250)
+		if isSprinting {
+			dampenHoriz = ((1.0 - (damping * (1 - ((1 - airMultiplier) * sprintMultiplier)))) * deltaTime * 250)
+		}
 	}
-	velocity[2] *= (1 - damping)
+
+	velocity[0] *= dampenHoriz
+	velocity[2] *= dampenHoriz
+	if isFlying {
+		velocity[1] *= dampenVert
+	}
+
 }
 func clearImage(img *image.RGBA) {
 	for i := range img.Pix {
@@ -1027,13 +1054,16 @@ func updateFPS() {
 
 	if timeElapsed >= (100 * time.Millisecond) {
 		fps = float64(frameCount) / timeElapsed.Seconds()
-		fpsString = "FPS: " + strconv.FormatFloat(mgl64.Round(fps, 2), 'f', -1, 32)
+		fpsString = "FPS: " + strconv.FormatFloat(mgl64.Round(fps, 1), 'f', -1, 32)
 		frameCount = 0
 		startTime = currentTime
 	}
 }
 func OnWindowResize(w *glfw.Window, width int, height int) {
 	gl.Viewport(0, 0, int32(width), int32(height))
+}
+func lerp(a, b mgl32.Vec3, alpha float32) mgl32.Vec3 {
+	return (b.Sub(a)).Mul(alpha).Add(a) // Linear interpolation between a and b
 }
 func main() {
 	runtime.LockOSThread()
@@ -1086,9 +1116,8 @@ func main() {
 
 	var previousFrame time.Time = time.Now() // for deltatime
 
-	var tickUpdateRate float32 = float32(1.0 / 120.0) //for ticks
+	var tickUpdateRate float32 = float32(1.0 / 30.0) //tick rate (30 TPS) ticks per second
 	var tickAccumulator float32
-	var distanceFell float32
 
 	for x := int32(0); x < config.NumOfChunks; x++ {
 		for z := int32(0); z < config.NumOfChunks; z++ {
@@ -1114,45 +1143,44 @@ func main() {
 	orthographicProjection := mgl32.Ortho(0, 1600, 900, 0, -1, 1)
 	projectionLoc2D := gl.GetUniformLocation(opengl2d, gl.Str("projection\x00"))
 	gl.UniformMatrix4fv(projectionLoc2D, 1, false, &orthographicProjection[0])
-	var textObjects []text
-	text1 := createText(ctx, &fpsString, 24, true, mgl32.Vec2{10, 400}, dst, opengl2d)
-	text2 := createText(ctx, "World!", 48, false, mgl32.Vec2{100, 100}, dst, opengl2d)
 
-	textObjects = append(textObjects, text1)
-	textObjects = append(textObjects, text2)
-	//textVao, textTexture := createText(ctx, "Testttt", dst, opengl2d)
-
+	var isGroundedState = "Grounded: " + strconv.FormatBool(isOnGround)
+	var isSprintingState = "Sprinting: " + strconv.FormatBool(isSprinting)
+	var velString string = "Velocity: " + strconv.FormatFloat(mgl64.Round(float64(velocity[0]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[1]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[2]), 2), 'f', -1, 32)
+	var textObjects []text = []text{
+		createText(ctx, &fpsString, 24, true, mgl32.Vec2{10, 400}, dst, opengl2d),
+		createText(ctx, &velString, 24, true, mgl32.Vec2{10, 380}, dst, opengl2d),
+		createText(ctx, &isGroundedState, 24, true, mgl32.Vec2{10, 360}, dst, opengl2d),
+		createText(ctx, &isSprintingState, 24, true, mgl32.Vec2{10, 340}, dst, opengl2d),
+	}
+	//var test mgl32.Vec3
 	initialized := false
 	for !window.ShouldClose() {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		deltaTime = float32(time.Since(previousFrame).Seconds())
 		previousFrame = time.Now()
 		tickAccumulator += deltaTime
-
 		glfw.PollEvents()
 		//hide mouse
 		window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
 		//mouse look around
 		window.SetCursorPosCallback(mouseCallback)
 		window.SetKeyCallback(input)
-		movement(window)
-		//physics tick update
-		updateFPS()
-		for tickAccumulator >= tickUpdateRate {
-			if !isFlying {
-				if isOnGround {
 
-					distanceFell = 0
-					velocity[1] -= 0.02 * deltaTime
-				} else {
-					distanceFell += 0.05
-					if distanceFell > 1.25 {
-						distanceFell = 1.25
-					}
-					velocity[1] -= 0.22 * deltaTime * (1 + distanceFell)
-				}
+		updateFPS()
+
+		for tickAccumulator >= tickUpdateRate {
+			//test = cameraPosition
+			movement(window)
+			velocityDamping(0.25)
+			isSprintingState = "Sprinting: " + strconv.FormatBool(isSprinting)
+			isGroundedState = "Grounded: " + strconv.FormatBool(isOnGround)
+			velString = "Velocity: " + strconv.FormatFloat(mgl64.Round(float64(velocity[0]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[1]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[2]), 2), 'f', -1, 32)
+			if !isFlying {
+
+				velocity[1] -= 0.016
+
 			}
-			velocityDamping(0.2)
 
 			if !isFlying {
 				collisions(chunks)
@@ -1162,10 +1190,22 @@ func main() {
 			} else {
 				jumpCooldown = 0
 			}
+
 			cameraPosition = cameraPosition.Add(velocity)
 			tickAccumulator -= tickUpdateRate
 		}
+		lerpVal := tickAccumulator / tickUpdateRate
+		if lerpVal < 0 {
+			lerpVal = 0
+		}
+		if lerpVal > 1 {
+			lerpVal = 1
+		}
 
+		//extrapolatedPosition := cameraPosition.Add(velocity.Mul(lerpVal * tickUpdateRate))
+
+		//cameraPositionLerped = lerp(cameraPositionLerped, extrapolatedPosition, lerpVal)
+		cameraPositionLerped = lerp(cameraPositionLerped, cameraPosition, lerpVal)
 		gl.Enable(gl.CULL_FACE)
 		gl.Enable(gl.DEPTH_TEST)
 
