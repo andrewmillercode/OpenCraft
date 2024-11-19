@@ -108,6 +108,112 @@ func getTime(x float32, y float32) float32 {
 	}
 	return x / y
 }
+func sign(x float32) float32 {
+	if x > 0 {
+		return 1
+	} else if x == 0 {
+		return 0
+	} else {
+		return -1
+	}
+
+}
+func frac0(x float32) float32 {
+	return x - float32(math.Floor(float64(x)))
+}
+func frac1(x float32) float32 {
+	return 1 - x + float32(math.Floor(float64(x)))
+}
+
+func raycast() uint8 {
+	var tMaxX, tMaxY, tMaxZ, tDeltaX, tDeltaY, tDeltaZ float32
+	var startPoint mgl32.Vec3 = cameraPosition
+	var endPoint mgl32.Vec3 = cameraPosition.Add(cameraFront.Mul(5))
+
+	var hitBlock mgl32.Vec3 = startPoint
+
+	var dx float32 = sign(endPoint.X() - startPoint.X())
+	if dx != 0 {
+		tDeltaX = float32(math.Min(float64((dx / (endPoint.X() - startPoint.X()))), 10000000))
+	} else {
+		tDeltaX = 10000000
+	}
+	if dx > 0 {
+		tMaxX = tDeltaX * frac1(startPoint.X())
+	} else {
+		tMaxX = tDeltaX * frac0(startPoint.X())
+	}
+
+	var dy float32 = sign(endPoint.Y() - startPoint.Y())
+	if dy != 0 {
+		tDeltaY = float32(math.Min(float64((dy / (endPoint.Y() - startPoint.Y()))), 10000000))
+	} else {
+		tDeltaY = 10000000
+	}
+	if dy > 0 {
+		tMaxY = tDeltaY * frac1(startPoint.Y())
+	} else {
+		tMaxY = tDeltaY * frac0(startPoint.Y())
+	}
+
+	var dz float32 = sign(endPoint.Z() - startPoint.Z())
+	if dz != 0 {
+		tDeltaZ = float32(math.Min(float64((dz / (endPoint.Z() - startPoint.Z()))), 10000000))
+	} else {
+		tDeltaZ = 10000000
+	}
+	if dz > 0 {
+		tMaxZ = tDeltaZ * frac1(startPoint.Z())
+	} else {
+		tMaxZ = tDeltaZ * frac0(startPoint.Z())
+	}
+
+	for !(tMaxX > 1 && tMaxY > 1 && tMaxZ > 1) {
+
+		ChunkX := math.Floor(float64(hitBlock[0] / 16))
+		ChunkZ := math.Floor(float64(hitBlock[2] / 16))
+
+		pos := blockPosition{int8(math.Floor(float64(hitBlock[0])) - (ChunkX * 16)), int16(math.Floor(float64(hitBlock[1]))), int8(math.Floor(float64(hitBlock[2])) - (ChunkZ * 16))}
+
+		chunk := chunks[int((ChunkX*float64(config.NumOfChunks))+ChunkZ)]
+		if _, exists := chunk.blocksData[pos]; exists {
+			delete(chunk.blocksData, pos)
+			rebuildChunk(chunk, int((ChunkX*float64(config.NumOfChunks))+ChunkZ))
+			return chunk.blocksData[pos].blockType
+		}
+
+		if tMaxX < tMaxY {
+			if tMaxX < tMaxZ {
+				hitBlock[0] += dx
+				tMaxX += tDeltaX
+			} else {
+				hitBlock[2] += dz
+				tMaxZ += tDeltaZ
+			}
+		} else {
+			if tMaxY < tMaxZ {
+				hitBlock[1] += dy
+				tMaxY += tDeltaY
+			} else {
+				hitBlock[2] += dz
+				tMaxZ += tDeltaZ
+			}
+		}
+
+	}
+	ChunkX := math.Floor(float64(hitBlock[0] / 16))
+	ChunkZ := math.Floor(float64(hitBlock[2] / 16))
+
+	pos := blockPosition{int8(math.Floor(float64(hitBlock[0])) - (ChunkX * 16)), int16(math.Floor(float64(hitBlock[1]))), int8(math.Floor(float64(hitBlock[2])) - (ChunkZ * 16))}
+
+	chunk := chunks[int((ChunkX*float64(config.NumOfChunks))+ChunkZ)]
+	if _, exists := chunk.blocksData[pos]; exists {
+		delete(chunk.blocksData, pos)
+		rebuildChunk(chunk, int((ChunkX*float64(config.NumOfChunks))+ChunkZ))
+		return chunk.blocksData[pos].blockType
+	}
+	return 9
+}
 
 func collide(box1, box2 aabb) (float32, []int) {
 	var xEntry, xExit, yEntry, yExit, zEntry, zExit float32

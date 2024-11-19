@@ -142,7 +142,7 @@ func updateFPS() {
 	if timeElapsed >= (100 * time.Millisecond) {
 		fps = float64(frameCount) / timeElapsed.Seconds()
 		fpsString = "FPS: " + strconv.FormatFloat(mgl64.Round(fps, 1), 'f', -1, 32)
-		fmt.Printf("%.2f\n", fps)
+		//fmt.Printf("%.2f\n", fps)
 		frameCount = 0
 		startTime = currentTime
 	}
@@ -206,7 +206,7 @@ func main() {
 	orthographicProjection := mgl32.Ortho(0, 1600, 900, 0, -1, 1)
 	projectionLoc2D := gl.GetUniformLocation(opengl2d, gl.Str("projection\x00"))
 	gl.UniformMatrix4fv(projectionLoc2D, 1, false, &orthographicProjection[0])
-
+	var position = "POS: " + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[0]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[1]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[2]), 2), 'f', -1, 32)
 	var isGroundedState = "Grounded: " + strconv.FormatBool(isOnGround)
 	var isSprintingState = "Sprinting: " + strconv.FormatBool(isSprinting)
 	var velString string = "Velocity: " + strconv.FormatFloat(mgl64.Round(float64(velocity[0]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[1]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[2]), 2), 'f', -1, 32)
@@ -215,6 +215,7 @@ func main() {
 		createText(ctx, &velString, 24, true, mgl32.Vec2{10, 380}, dst, opengl2d),
 		createText(ctx, &isGroundedState, 24, true, mgl32.Vec2{10, 360}, dst, opengl2d),
 		createText(ctx, &isSprintingState, 24, true, mgl32.Vec2{10, 340}, dst, opengl2d),
+		createText(ctx, &position, 24, true, mgl32.Vec2{10, 320}, dst, opengl2d),
 	}
 
 	initialized := false
@@ -226,8 +227,10 @@ func main() {
 		glfw.PollEvents()
 		//hide mouse
 		window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
+		//window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
 		//mouse look around
-		window.SetCursorPosCallback(mouseCallback)
+		window.SetCursorPosCallback(mouseMoveCallback)
+		window.SetMouseButtonCallback(mouseInputCallback)
 		window.SetKeyCallback(input)
 
 		updateFPS()
@@ -238,6 +241,7 @@ func main() {
 
 			//Update Debug
 			if showDebug {
+				position = "POS: " + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[0]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[1]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[2]), 2), 'f', -1, 32)
 				isSprintingState = "Sprinting: " + strconv.FormatBool(isSprinting)
 				isGroundedState = "Grounded: " + strconv.FormatBool(isOnGround)
 				velString = "Velocity: " + strconv.FormatFloat(mgl64.Round(float64(velocity[0]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[1]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[2]), 2), 'f', -1, 32)

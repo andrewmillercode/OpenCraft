@@ -40,7 +40,7 @@ func input(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, 
 
 }
 
-func mouseCallback(window *glfw.Window, xPos, yPos float64) {
+func mouseMoveCallback(window *glfw.Window, xPos, yPos float64) {
 	if firstMouse {
 		lastX = xPos
 		lastY = yPos
@@ -82,6 +82,10 @@ func mouseCallback(window *glfw.Window, xPos, yPos float64) {
 	}.Normalize()
 	cameraRight = cameraFront.Cross(mgl32.Vec3{0, 1, 0}).Normalize()
 	cameraUp = cameraRight.Cross(cameraFront).Normalize()
+}
+func mouseInputCallback(window *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
+	hitBlock := raycast()
+	fmt.Printf("hit block type: %d \n", hitBlock)
 }
 
 // Movement inputs, gets checked each frame for fast responses.

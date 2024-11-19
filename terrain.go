@@ -14,6 +14,15 @@ import (
 
 var chunks []chunkData
 
+func rebuildChunk(chunk chunkData, index int) {
+
+	row := int32(index) / config.NumOfChunks
+	col := int32(index) % config.NumOfChunks
+	vao, trisCount := createChunkVAO(chunk.blocksData, row, col)
+	chunks[index].vao = vao
+	chunks[index].trisCount = trisCount
+}
+
 func createChunks() {
 	for x := int32(0); x < config.NumOfChunks; x++ {
 		for z := int32(0); z < config.NumOfChunks; z++ {
