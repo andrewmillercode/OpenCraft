@@ -60,18 +60,18 @@ func chunk(pos chunkPosition) chunkData {
 						lightLevel: 0,
 					}
 				}
-				/*
-					if y < 0 {
-						isCave := fractalNoise3D(int32(x)+pos.x, int32(y), int32(z)+pos.z, 0.7, 8)
 
-						if isCave > 0.1 {
-							delete(blocksData, blockPosition{x, y, z})
-							if y == maxValue {
-								maxValue = y - 1
-							}
+				if y < 0 {
+					isCave := fractalNoise3D(int32(x)+pos.x, int32(y), int32(z)+pos.z, 0.7, 8)
+
+					if isCave > 0.1 {
+						delete(blocksData, blockPosition{x, y, z})
+						if y == maxValue {
+							maxValue = y - 1
 						}
 					}
-				*/
+				}
+
 			}
 
 			if block, exists := blocksData[blockPosition{x, maxValue, z}]; exists {
