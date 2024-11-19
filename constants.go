@@ -1,12 +1,12 @@
 package main
 
 var (
-	seed int64 = 1
-
-	runningSpeed float32 = 1.5
-	flyingSpeed  float32 = 4
-	walkingSpeed float32 = 1.2
-	jumpHeight   float32 = 1.5
+	seed           int64   = 1
+	tickUpdateRate float32 = float32(1.0 / 30.0) //tick rate (30 TPS) ticks per second
+	runningSpeed   float32 = 3
+	flyingSpeed    float32 = 5
+	walkingSpeed   float32 = 2.3
+	jumpHeight     float32 = 0.25
 )
 var (
 	DirtID  uint8 = 0
