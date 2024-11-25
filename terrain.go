@@ -9,34 +9,36 @@ import (
 
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
-	"github.com/go-gl/mathgl/mgl64"
 )
 
-var chunks []chunkData
+var chunks map[chunkPosition]chunkData = make(map[chunkPosition]chunkData)
 
-func rebuildChunk(chunk chunkData, index int) {
+func rebuildChunk(chunk chunkData, chunkPos chunkPosition) {
 
-	row := int32(index) / config.NumOfChunks
-	col := int32(index) % config.NumOfChunks
-	vao, trisCount := createChunkVAO(chunk.blocksData, row, col)
-	chunks[index].vao = vao
-	chunks[index].trisCount = trisCount
+	//row := int32(index) / config.NumOfChunks
+	//col := int32(index) % config.NumOfChunks
+	vao, trisCount := createChunkVAO(chunk.blocksData, chunkPos)
+	chunks[chunkPos] = chunkData{
+		blocksData: chunk.blocksData,
+		vao:        vao,
+		trisCount:  trisCount,
+	}
+
 }
 
 func createChunks() {
 	for x := int32(0); x < config.NumOfChunks; x++ {
 		for z := int32(0); z < config.NumOfChunks; z++ {
-			chunks = append(chunks, chunk(chunkPosition{x * 16, z * 16}))
+			chunks[chunkPosition{x, z}] = chunk(chunkPosition{x, z})
 		}
 	}
-
-	for i := range chunks {
-		row := int32(i) / config.NumOfChunks
-		col := int32(i) % config.NumOfChunks
-		vao, trisCount := createChunkVAO(chunks[i].blocksData, row, col)
-		chunks[i].vao = vao
-		chunks[i].trisCount = trisCount
-
+	for chunkPos, _chunkData := range chunks {
+		vao, trisCount := createChunkVAO(_chunkData.blocksData, chunkPos)
+		chunks[chunkPos] = chunkData{
+			blocksData: _chunkData.blocksData,
+			vao:        vao,
+			trisCount:  trisCount,
+		}
 	}
 }
 
@@ -177,7 +179,7 @@ func fractalNoise3D(x int32, y int32, z int32, amplitude float32, scale float32)
 
 }
 
-func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32) (uint32, uint32) {
+func createChunkVAO(chunkData map[blockPosition]blockData, chunkPos chunkPosition) (uint32, uint32) {
 
 	var chunkVertices []float32
 	grassTint := mgl32.Vec3{0.486, 0.741, 0.419}
@@ -210,10 +212,10 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 				if !f {
 
 					if key.z == 15 {
-						rowFront := col + 1
-						adjustedRow := (config.NumOfChunks * row)
+						////rowFront := col + 1
+						//adjustedRow := (config.NumOfChunks * row)
 
-						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+rowFront), 0, float64(config.NumOfChunks*config.NumOfChunks)-1))].blocksData[blockPosition{key.x, key.y, 0}]
+						_, blockAdjChunk := chunks[chunkPosition{chunkPos.x, chunkPos.z + 1}].blocksData[blockPosition{key.x, key.y, 0}]
 						if blockAdjChunk {
 							continue
 						}
@@ -235,9 +237,9 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 
 				if !b {
 					if key.z == 0 {
-						rowFront := col - 1
-						adjustedRow := (config.NumOfChunks * row)
-						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+rowFront), 0, float64(config.NumOfChunks*config.NumOfChunks)-1))].blocksData[blockPosition{key.x, key.y, 15}]
+						//rowFront := col - 1
+						//adjustedRow := (config.NumOfChunks * row)
+						_, blockAdjChunk := chunks[chunkPosition{chunkPos.x, chunkPos.z - 1}].blocksData[blockPosition{key.x, key.y, 15}]
 						if blockAdjChunk {
 							continue
 						}
@@ -258,9 +260,9 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 			if i >= (2*18) && i <= (2*18)+15 {
 				if !l {
 					if key.x == 0 {
-						rowFront := row - 1
-						adjustedRow := (config.NumOfChunks * rowFront)
-						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+col), 0, float64(config.NumOfChunks*config.NumOfChunks)-1))].blocksData[blockPosition{15, key.y, key.z}]
+						//rowFront := row - 1
+						//adjustedRow := (config.NumOfChunks * rowFront)
+						_, blockAdjChunk := chunks[chunkPosition{chunkPos.x - 1, chunkPos.z}].blocksData[blockPosition{15, key.y, key.z}]
 						if blockAdjChunk {
 							continue
 						}
@@ -282,9 +284,9 @@ func createChunkVAO(chunkData map[blockPosition]blockData, row int32, col int32)
 
 				if !r {
 					if key.x == 15 {
-						rowFront := row + 1
-						adjustedRow := (config.NumOfChunks * rowFront)
-						_, blockAdjChunk := chunks[int(mgl64.Clamp(float64(adjustedRow+col), 0, float64(config.NumOfChunks*config.NumOfChunks)-1))].blocksData[blockPosition{0, key.y, key.z}]
+						//rowFront := row + 1
+						//adjustedRow := (config.NumOfChunks * rowFront)
+						_, blockAdjChunk := chunks[chunkPosition{chunkPos.x + 1, chunkPos.z}].blocksData[blockPosition{0, key.y, key.z}]
 						if blockAdjChunk {
 							continue
 						}

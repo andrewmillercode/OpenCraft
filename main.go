@@ -278,15 +278,15 @@ func main() {
 		viewLoc = gl.GetUniformLocation(opengl3d, gl.Str("view\x00"))
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
 
-		for _, chunk := range chunks {
+		for chunkPos, chunkData := range chunks {
 			// Generate model matrix with translation
-			model := mgl32.Translate3D(float32(chunk.pos.x), 0, float32(chunk.pos.z))
+			model := mgl32.Translate3D(float32(chunkPos.x*16), 0, float32(chunkPos.z*16))
 			modelLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
 			gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 
 			// Draw the cube
-			gl.BindVertexArray(chunk.vao)
-			gl.DrawArrays(gl.TRIANGLES, 0, int32(chunk.trisCount))
+			gl.BindVertexArray(chunkData.vao)
+			gl.DrawArrays(gl.TRIANGLES, 0, int32(chunkData.trisCount))
 		}
 		if showDebug {
 			//UI RENDERING STAGE

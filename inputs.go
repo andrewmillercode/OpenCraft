@@ -133,7 +133,6 @@ func movement(window *glfw.Window) {
 			return
 		}
 		jumpCooldown = 0.05
-		fmt.Printf("Vel Y apply:%.2f\n", jumpHeight)
 		velocity[1] += jumpHeight
 
 	}

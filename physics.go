@@ -1,7 +1,6 @@
 package main
 
 import (
-	"MinecraftGolang/config"
 	"math"
 
 	"github.com/go-gl/mathgl/mgl32"
@@ -10,7 +9,7 @@ import (
 func Collider(time float32, normal []int) collider {
 	return collider{Time: time, Normal: normal}
 }
-func collisions(chunks []chunkData) {
+func collisions(chunks map[chunkPosition]chunkData) {
 	isOnGround = false
 	var playerWidth float32 = 0.9
 
@@ -19,31 +18,36 @@ func collisions(chunks []chunkData) {
 		cameraPosition.Add(mgl32.Vec3{playerWidth / 2, 0.25, playerWidth / 2}),
 	)
 
-	playerChunkX := int(math.Floor(float64(cameraPosition[0] / 16)))
-	playerChunkZ := int(math.Floor(float64(cameraPosition[2] / 16)))
-
 	pIntX, pIntY, pIntZ := int32(cameraPosition[0]), int32(cameraPosition[1]), int32(cameraPosition[2])
 
 	for x := -1; x <= 1; x++ {
 		for z := -1; z <= 1; z++ {
-			newRow := playerChunkX + x
-			newCol := playerChunkZ + z
-			if newRow >= 0 && newRow < len(chunks)/int(config.NumOfChunks) && newCol >= 0 && newCol < int(config.NumOfChunks) {
+			currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/16))) + int32(x), int32(math.Floor(float64(cameraPosition[2]/16))) + int32(z)}
+			if _, exists := chunks[currentPlayerChunkPos]; exists {
 
-				chunk := chunks[(newRow*int(config.NumOfChunks))+newCol]
+				chunk := chunks[currentPlayerChunkPos]
 				for i := 0; i < 3; i++ {
 					var colliders []collider
 					for blockX := pIntX - 3; blockX < pIntX+3; blockX++ {
 						for blockZ := pIntZ - 3; blockZ < pIntZ+3; blockZ++ {
 							for blockY := pIntY - 3; blockY < pIntY+3; blockY++ {
-								if _, exists := chunk.blocksData[blockPosition{int8(blockX - chunk.pos.x), int16(blockY), int8(blockZ - chunk.pos.z)}]; exists {
-									key := blockPosition{int8(blockX - chunk.pos.x), int16(blockY), int8(blockZ - chunk.pos.z)}
-									floatBlockPos := mgl32.Vec3{float32(key.x), float32(key.y), float32(key.z)}
-									blockAABB := AABB(
-										floatBlockPos.Sub(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(chunk.pos.x), 0, float32(chunk.pos.z)}),
-										floatBlockPos.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(chunk.pos.x), 0, float32(chunk.pos.z)}),
-									)
 
+								relativeBlockPosition := blockPosition{int8(blockX - (currentPlayerChunkPos.x * 16)), int16(blockY), int8(blockZ - (currentPlayerChunkPos.z * 16))}
+
+								if _, exists := chunk.blocksData[relativeBlockPosition]; exists {
+
+									floatBlockPos := mgl32.Vec3{float32(relativeBlockPosition.x), float32(relativeBlockPosition.y), float32(relativeBlockPosition.z)}
+									absoluteBlockPosition := mgl32.Vec3{float32(currentPlayerChunkPos.x*16) + floatBlockPos.X(), floatBlockPos.Y(), float32(currentPlayerChunkPos.z*16) + floatBlockPos.Z()}
+									/*
+										blockAABB := AABB(
+											floatBlockPos.Sub(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(currentPlayerChunkPos.x * 16), 0, float32(currentPlayerChunkPos.z * 16)}),
+											floatBlockPos.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(currentPlayerChunkPos.x * 16), 0, float32(currentPlayerChunkPos.z * 16)}),
+										)
+									*/
+									blockAABB := AABB(
+										absoluteBlockPosition.Sub(mgl32.Vec3{0.5, 0.5, 0.5}),
+										absoluteBlockPosition.Add(mgl32.Vec3{0.5, 0.5, 0.5}),
+									)
 									entry, normal := collide(playerBox, blockAABB)
 
 									if normal == nil {
@@ -170,15 +174,20 @@ func raycast() uint8 {
 
 	for !(tMaxX > 1 && tMaxY > 1 && tMaxZ > 1) {
 
-		ChunkX := math.Floor(float64(hitBlock[0] / 16))
-		ChunkZ := math.Floor(float64(hitBlock[2] / 16))
+		ChunkPos := chunkPosition{int32(math.Floor(float64(hitBlock[0] / 16))), int32(math.Floor(float64(hitBlock[2] / 16)))}
+		pos := blockPosition{int8(math.Floor(float64(hitBlock[0])) - float64(ChunkPos.x*16)), int16(math.Floor(float64(hitBlock[1]))), int8(math.Floor(float64(hitBlock[2])) - float64(ChunkPos.z*16))}
 
-		pos := blockPosition{int8(math.Floor(float64(hitBlock[0])) - (ChunkX * 16)), int16(math.Floor(float64(hitBlock[1]))), int8(math.Floor(float64(hitBlock[2])) - (ChunkZ * 16))}
-
-		chunk := chunks[int((ChunkX*float64(config.NumOfChunks))+ChunkZ)]
+		chunk := chunks[ChunkPos]
 		if _, exists := chunk.blocksData[pos]; exists {
+
 			delete(chunk.blocksData, pos)
-			rebuildChunk(chunk, int((ChunkX*float64(config.NumOfChunks))+ChunkZ))
+			rebuildChunk(chunk, ChunkPos)
+			isBordering, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
+			if isBordering {
+				for i := range borderingChunks {
+					rebuildChunk(chunks[borderingChunks[i]], borderingChunks[i])
+				}
+			}
 			return chunk.blocksData[pos].blockType
 		}
 
@@ -201,15 +210,20 @@ func raycast() uint8 {
 		}
 
 	}
-	ChunkX := math.Floor(float64(hitBlock[0] / 16))
-	ChunkZ := math.Floor(float64(hitBlock[2] / 16))
+	ChunkPos := chunkPosition{int32(math.Floor(float64(hitBlock[0] / 16))), int32(math.Floor(float64(hitBlock[2] / 16)))}
+	pos := blockPosition{int8(math.Floor(float64(hitBlock[0])) - float64(ChunkPos.x*16)), int16(math.Floor(float64(hitBlock[1]))), int8(math.Floor(float64(hitBlock[2])) - float64(ChunkPos.z*16))}
 
-	pos := blockPosition{int8(math.Floor(float64(hitBlock[0])) - (ChunkX * 16)), int16(math.Floor(float64(hitBlock[1]))), int8(math.Floor(float64(hitBlock[2])) - (ChunkZ * 16))}
-
-	chunk := chunks[int((ChunkX*float64(config.NumOfChunks))+ChunkZ)]
+	chunk := chunks[ChunkPos]
 	if _, exists := chunk.blocksData[pos]; exists {
+
 		delete(chunk.blocksData, pos)
-		rebuildChunk(chunk, int((ChunkX*float64(config.NumOfChunks))+ChunkZ))
+		rebuildChunk(chunk, ChunkPos)
+		isBordering, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
+		if isBordering {
+			for i := range borderingChunks {
+				rebuildChunk(chunks[borderingChunks[i]], borderingChunks[i])
+			}
+		}
 		return chunk.blocksData[pos].blockType
 	}
 	return 9

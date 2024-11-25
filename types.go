@@ -18,10 +18,41 @@ type blockData struct {
 }
 
 type chunkData struct {
-	pos        chunkPosition
 	blocksData map[blockPosition]blockData
 	vao        uint32
 	trisCount  uint32
+}
+
+func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []chunkPosition) {
+
+	var borderingChunks []chunkPosition
+
+	if _, exists := chunks[chunkPosition{chunkPos.x + 1, chunkPos.z}]; exists {
+
+		if pos.x == 15 {
+			borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x + 1, chunkPos.z})
+		}
+	}
+	if _, exists := chunks[chunkPosition{chunkPos.x - 1, chunkPos.z}]; exists {
+		if pos.x == 0 {
+			borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x - 1, chunkPos.z})
+		}
+	}
+	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.z + 1}]; exists {
+		if pos.z == 15 {
+			borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.z + 1})
+		}
+	}
+	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.z - 1}]; exists {
+		if pos.z == 0 {
+			borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.z - 1})
+		}
+	}
+	if len(borderingChunks) > 0 {
+		return true, borderingChunks
+	}
+	return false, borderingChunks
+
 }
 
 func chunk(pos chunkPosition) chunkData {
@@ -33,7 +64,7 @@ func chunk(pos chunkPosition) chunkData {
 
 		for z := int8(0); z < 16; z++ {
 
-			noiseValue := fractalNoise(int32(x)+pos.x, int32(z)+pos.z, amplitude, 4, 1.5, 0.5, scale)
+			noiseValue := fractalNoise(int32(x)+(pos.x*16), int32(z)+(pos.z*16), amplitude, 4, 1.5, 0.5, scale)
 			maxValue := noiseValue
 			for y := noiseValue; y >= int16(-128); y-- {
 
@@ -62,7 +93,7 @@ func chunk(pos chunkPosition) chunkData {
 				}
 
 				if y < 0 {
-					isCave := fractalNoise3D(int32(x)+pos.x, int32(y), int32(z)+pos.z, 0.7, 8)
+					isCave := fractalNoise3D(int32(x)+(pos.x*16), int32(y), int32(z)+(pos.z*16), 0.7, 8)
 
 					if isCave > 0.1 {
 						delete(blocksData, blockPosition{x, y, z})
@@ -86,12 +117,10 @@ func chunk(pos chunkPosition) chunkData {
 	}
 
 	for _, blockPos := range topMostBlocks {
-		//dfs(blocksData, blockPos, 15)
 		propagateLight(blocksData, blockPos, 15)
 	}
 
 	return chunkData{
-		pos:        pos,
 		blocksData: blocksData,
 		vao:        0,
 		trisCount:  0,
