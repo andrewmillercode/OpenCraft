@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
@@ -84,8 +83,16 @@ func mouseMoveCallback(window *glfw.Window, xPos, yPos float64) {
 	cameraUp = cameraRight.Cross(cameraFront).Normalize()
 }
 func mouseInputCallback(window *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
-	hitBlock := raycast()
-	fmt.Printf("hit block type: %d \n", hitBlock)
+
+	if action == glfw.Press {
+		if button == glfw.MouseButtonRight {
+			raycast(false)
+		}
+
+		if button == glfw.MouseButtonLeft {
+			raycast(true)
+		}
+	}
 }
 
 // Movement inputs, gets checked each frame for fast responses.

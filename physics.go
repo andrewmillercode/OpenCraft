@@ -6,12 +6,13 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 )
 
+var playerWidth float32 = 0.9
+
 func Collider(time float32, normal []int) collider {
 	return collider{Time: time, Normal: normal}
 }
 func collisions(chunks map[chunkPosition]chunkData) {
 	isOnGround = false
-	var playerWidth float32 = 0.9
 
 	playerBox := AABB(
 		cameraPosition.Sub(mgl32.Vec3{playerWidth / 2, 1.5, playerWidth / 2}),
@@ -38,12 +39,7 @@ func collisions(chunks map[chunkPosition]chunkData) {
 
 									floatBlockPos := mgl32.Vec3{float32(relativeBlockPosition.x), float32(relativeBlockPosition.y), float32(relativeBlockPosition.z)}
 									absoluteBlockPosition := mgl32.Vec3{float32(currentPlayerChunkPos.x*16) + floatBlockPos.X(), floatBlockPos.Y(), float32(currentPlayerChunkPos.z*16) + floatBlockPos.Z()}
-									/*
-										blockAABB := AABB(
-											floatBlockPos.Sub(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(currentPlayerChunkPos.x * 16), 0, float32(currentPlayerChunkPos.z * 16)}),
-											floatBlockPos.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Add(mgl32.Vec3{float32(currentPlayerChunkPos.x * 16), 0, float32(currentPlayerChunkPos.z * 16)}),
-										)
-									*/
+
 									blockAABB := AABB(
 										absoluteBlockPosition.Sub(mgl32.Vec3{0.5, 0.5, 0.5}),
 										absoluteBlockPosition.Add(mgl32.Vec3{0.5, 0.5, 0.5}),
@@ -129,13 +125,26 @@ func frac1(x float32) float32 {
 	return 1 - x + float32(math.Floor(float64(x)))
 }
 
-func raycast() uint8 {
+func IsCollidingWithPlacedBlock(absBlockPos mgl32.Vec3) bool {
+	playerBox := AABB(
+		cameraPosition.Sub(mgl32.Vec3{playerWidth / 2, 1.5, playerWidth / 2}),
+		cameraPosition.Add(mgl32.Vec3{playerWidth / 2, 0.25, playerWidth / 2}),
+	)
+	blockAABB := AABB(
+		absBlockPos.Sub(mgl32.Vec3{0.5, 0.5, 0.5}),
+		absBlockPos.Add(mgl32.Vec3{0.5, 0.5, 0.5}),
+	)
+	return Intersects(playerBox, blockAABB)
+
+}
+
+// true = delete, false = create
+func raycast(action bool) {
+
 	var tMaxX, tMaxY, tMaxZ, tDeltaX, tDeltaY, tDeltaZ float32
-	var startPoint mgl32.Vec3 = cameraPosition
-	var endPoint mgl32.Vec3 = cameraPosition.Add(cameraFront.Mul(5))
-
-	var hitBlock mgl32.Vec3 = startPoint
-
+	var startPoint mgl32.Vec3 = cameraPosition.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Sub(cameraFront.Mul(0.1))
+	var endPoint mgl32.Vec3 = startPoint.Add(cameraFront.Mul(5))
+	var hitPoint mgl32.Vec3 = startPoint
 	var dx float32 = sign(endPoint.X() - startPoint.X())
 	if dx != 0 {
 		tDeltaX = float32(math.Min(float64((dx / (endPoint.X() - startPoint.X()))), 10000000))
@@ -171,62 +180,84 @@ func raycast() uint8 {
 	} else {
 		tMaxZ = tDeltaZ * frac0(startPoint.Z())
 	}
-
 	for !(tMaxX > 1 && tMaxY > 1 && tMaxZ > 1) {
 
-		ChunkPos := chunkPosition{int32(math.Floor(float64(hitBlock[0] / 16))), int32(math.Floor(float64(hitBlock[2] / 16)))}
-		pos := blockPosition{int8(math.Floor(float64(hitBlock[0])) - float64(ChunkPos.x*16)), int16(math.Floor(float64(hitBlock[1]))), int8(math.Floor(float64(hitBlock[2])) - float64(ChunkPos.z*16))}
-
-		chunk := chunks[ChunkPos]
-		if _, exists := chunk.blocksData[pos]; exists {
-
-			delete(chunk.blocksData, pos)
-			rebuildChunk(chunk, ChunkPos)
-			isBordering, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
-			if isBordering {
-				for i := range borderingChunks {
-					rebuildChunk(chunks[borderingChunks[i]], borderingChunks[i])
-				}
-			}
-			return chunk.blocksData[pos].blockType
+		ChunkPos := chunkPosition{
+			int32(math.Floor(float64(hitPoint[0] / 16))),
+			int32(math.Floor(float64(hitPoint[2] / 16))),
 		}
 
+		pos := blockPosition{
+			int8(math.Floor(float64(hitPoint[0]) - float64(ChunkPos.x*16))),
+			int16(math.Floor(float64(hitPoint[1]))),
+			int8(math.Floor(float64(hitPoint[2]) - float64(ChunkPos.z*16))),
+		}
+		absPos := mgl32.Vec3{
+			float32(math.Floor(float64(hitPoint[0]))),
+			float32(math.Floor(float64(hitPoint[1]))),
+			float32(math.Floor(float64(hitPoint[2]))),
+		}
+		if action {
+
+			if _, exists := chunks[ChunkPos].blocksData[pos]; exists {
+
+				delete(chunks[ChunkPos].blocksData, pos)
+				rebuildChunk(chunks[ChunkPos], ChunkPos)
+				isBordering, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
+				if isBordering {
+					for i := range borderingChunks {
+						rebuildChunk(chunks[borderingChunks[i]], borderingChunks[i])
+					}
+				}
+				return
+			}
+		}
 		if tMaxX < tMaxY {
 			if tMaxX < tMaxZ {
-				hitBlock[0] += dx
+				hitPoint[0] += dx
 				tMaxX += tDeltaX
 			} else {
-				hitBlock[2] += dz
+				hitPoint[2] += dz
 				tMaxZ += tDeltaZ
 			}
 		} else {
 			if tMaxY < tMaxZ {
-				hitBlock[1] += dy
+				hitPoint[1] += dy
 				tMaxY += tDeltaY
 			} else {
-				hitBlock[2] += dz
+				hitPoint[2] += dz
 				tMaxZ += tDeltaZ
 			}
 		}
+		if !action {
+			tempChunkPos := chunkPosition{int32(math.Floor(float64(hitPoint[0] / 16))), int32(math.Floor(float64(hitPoint[2] / 16)))}
+			tempPos := blockPosition{int8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*16))), int16(math.Floor(float64(hitPoint[1]))), int8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*16)))}
 
-	}
-	ChunkPos := chunkPosition{int32(math.Floor(float64(hitBlock[0] / 16))), int32(math.Floor(float64(hitBlock[2] / 16)))}
-	pos := blockPosition{int8(math.Floor(float64(hitBlock[0])) - float64(ChunkPos.x*16)), int16(math.Floor(float64(hitBlock[1]))), int8(math.Floor(float64(hitBlock[2])) - float64(ChunkPos.z*16))}
+			if _, exists := chunks[tempChunkPos].blocksData[tempPos]; exists {
 
-	chunk := chunks[ChunkPos]
-	if _, exists := chunk.blocksData[pos]; exists {
+				isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
 
-		delete(chunk.blocksData, pos)
-		rebuildChunk(chunk, ChunkPos)
-		isBordering, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
-		if isBordering {
-			for i := range borderingChunks {
-				rebuildChunk(chunks[borderingChunks[i]], borderingChunks[i])
+				if _, exists := chunks[ChunkPos].blocksData[pos]; !exists && !isCollidingWithPlayer {
+					blockDataTemp := chunks[ChunkPos].blocksData
+					blockDataTemp[pos] = blockData{
+						blockType:  0,
+						lightLevel: 10,
+					}
+					chunks[ChunkPos] = chunkData{
+						blocksData: blockDataTemp,
+						vao:        chunks[ChunkPos].vao,
+						trisCount:  chunks[ChunkPos].trisCount,
+					}
+
+					rebuildChunk(chunks[ChunkPos], ChunkPos)
+					return
+				}
 			}
+
 		}
-		return chunk.blocksData[pos].blockType
+
 	}
-	return 9
+
 }
 
 func collide(box1, box2 aabb) (float32, []int) {

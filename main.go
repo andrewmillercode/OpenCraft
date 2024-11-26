@@ -209,8 +209,9 @@ func main() {
 	var position = "POS: " + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[0]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[1]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[2]), 2), 'f', -1, 32)
 	var isGroundedState = "Grounded: " + strconv.FormatBool(isOnGround)
 	var isSprintingState = "Sprinting: " + strconv.FormatBool(isSprinting)
-	var velString string = "Velocity: " + strconv.FormatFloat(mgl64.Round(float64(velocity[0]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[1]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[2]), 2), 'f', -1, 32)
+	var velString string = "Velocity: " + strconv.FormatFloat(mgl64.Round(float64(velocity[0]), 2), 'f', -1, 32) + " , " + strconv.FormatFloat(mgl64.Round(float64(velocity[1]), 2), 'f', -1, 32) + " , " + strconv.FormatFloat(mgl64.Round(float64(velocity[2]), 2), 'f', -1, 32)
 	var textObjects []text = []text{
+		createText(ctx, "+", 24, false, mgl32.Vec2{500, 20}, dst, opengl2d),
 		createText(ctx, &fpsString, 24, true, mgl32.Vec2{10, 400}, dst, opengl2d),
 		createText(ctx, &velString, 24, true, mgl32.Vec2{10, 380}, dst, opengl2d),
 		createText(ctx, &isGroundedState, 24, true, mgl32.Vec2{10, 360}, dst, opengl2d),
@@ -233,7 +234,6 @@ func main() {
 		window.SetMouseButtonCallback(mouseInputCallback)
 		window.SetKeyCallback(input)
 
-		updateFPS()
 		movement(window)
 		for tickAccumulator >= tickUpdateRate {
 			previousCameraPosition = cameraPosition
@@ -241,7 +241,7 @@ func main() {
 
 			//Update Debug
 			if showDebug {
-				position = "POS: " + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[0]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[1]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[2]), 2), 'f', -1, 32)
+				position = "POS: " + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[0]), 2), 'f', -1, 32) + " , " + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[1]), 2), 'f', -1, 32) + " , " + strconv.FormatFloat(mgl64.Round(float64(cameraPosition[2]), 2), 'f', -1, 32)
 				isSprintingState = "Sprinting: " + strconv.FormatBool(isSprinting)
 				isGroundedState = "Grounded: " + strconv.FormatBool(isOnGround)
 				velString = "Velocity: " + strconv.FormatFloat(mgl64.Round(float64(velocity[0]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[1]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[2]), 2), 'f', -1, 32)
@@ -317,6 +317,7 @@ func main() {
 			initialized = true
 			fmt.Printf("Seconds to generate: %.2f", time.Since(startTime).Seconds())
 		}
+		updateFPS()
 	}
 }
 

@@ -16,7 +16,10 @@ type blockData struct {
 	blockType  uint8
 	lightLevel uint8
 }
-
+type blockPosChunkPos struct {
+	chunkPos chunkPosition
+	blockPos blockPosition
+}
 type chunkData struct {
 	blocksData map[blockPosition]blockData
 	vao        uint32
@@ -133,6 +136,11 @@ type aabb struct {
 
 func AABB(min, max mgl32.Vec3) aabb {
 	return aabb{Min: min, Max: max}
+}
+func Intersects(a, b aabb) bool {
+	return (a.Min.X() <= b.Max.X() && a.Max.X() >= b.Min.X()) &&
+		(a.Min.Y() <= b.Max.Y() && a.Max.Y() >= b.Min.Y()) &&
+		(a.Min.Z() <= b.Max.Z() && a.Max.Z() >= b.Min.Z())
 }
 
 type text struct {
