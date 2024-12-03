@@ -45,7 +45,7 @@ func createText(ctx *freetype.Context, content interface{}, fontSize float64, is
 
 	ctx.SetFontSize(fontSize)
 	//X,Y
-	pt := freetype.Pt(int(position[0]), int(position[1])+int(ctx.PointToFixed(48)>>6))
+	pt := freetype.Pt(0, int(ctx.PointToFixed(48)>>6))
 
 	// Draw the string on the destination image
 	var err error
@@ -62,14 +62,13 @@ func createText(ctx *freetype.Context, content interface{}, fontSize float64, is
 	}
 
 	vertices := []float32{
-		// Positions    // Texture Coords
 		0.0, 1.0, 0.0, 0.0, 1.0, // Top-left
 		0.0, 0.0, 0.0, 0.0, 0.0, // Bottom-left
 		1.0, 0.0, 0.0, 1.0, 0.0, // Bottom-right
 
 		0.0, 1.0, 0.0, 0.0, 1.0, // Top-left
 		1.0, 0.0, 0.0, 1.0, 0.0, // Bottom-right
-		1.0, 1.0, 0.0, 1.0, 1.0, // Top-right
+		1.0, 1.0, 0.0, 1.0, 1.0,
 	}
 	textTexture := uploadTextTexture(dst)
 	gl.BindTexture(gl.TEXTURE_2D, textTexture) // Upload text as a texture

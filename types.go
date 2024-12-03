@@ -3,10 +3,15 @@ package main
 import "github.com/go-gl/mathgl/mgl32"
 
 type blockPosition struct {
-	x int8
+	x uint8
 	y int16
-	z int8
+	z uint8
 }
+type blockPositionHoriz struct {
+	x uint8
+	z uint8
+}
+
 type chunkPosition struct {
 	x int32
 	z int32
@@ -16,10 +21,7 @@ type blockData struct {
 	blockType  uint8
 	lightLevel uint8
 }
-type blockPosChunkPos struct {
-	chunkPos chunkPosition
-	blockPos blockPosition
-}
+
 type chunkData struct {
 	blocksData map[blockPosition]blockData
 	vao        uint32
@@ -60,15 +62,16 @@ func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []c
 
 func chunk(pos chunkPosition) chunkData {
 	var blocksData map[blockPosition]blockData = make(map[blockPosition]blockData)
+	//blocks that are touching sky
+	//var exposedBlocks map[blockPositionHoriz]int16 = make(map[blockPositionHoriz]int16)
 	var scale float32 = 100 // Adjust as needed for terrain detail
 	var amplitude float32 = 30
-	var topMostBlocks []blockPosition
-	for x := int8(0); x < 16; x++ {
+	for x := uint8(0); x < 16; x++ {
 
-		for z := int8(0); z < 16; z++ {
+		for z := uint8(0); z < 16; z++ {
 
 			noiseValue := fractalNoise(int32(x)+(pos.x*16), int32(z)+(pos.z*16), amplitude, 4, 1.5, 0.5, scale)
-			maxValue := noiseValue
+			//maxValue := noiseValue
 			for y := noiseValue; y >= int16(-128); y-- {
 
 				//determine block type
@@ -86,7 +89,7 @@ func chunk(pos chunkPosition) chunkData {
 				if y == noiseValue {
 					blocksData[blockPosition{x, y, z}] = blockData{
 						blockType:  GrassID,
-						lightLevel: 15,
+						lightLevel: 0,
 					}
 				} else {
 					blocksData[blockPosition{x, y, z}] = blockData{
@@ -100,28 +103,31 @@ func chunk(pos chunkPosition) chunkData {
 
 					if isCave > 0.1 {
 						delete(blocksData, blockPosition{x, y, z})
-						if y == maxValue {
-							maxValue = y - 1
-						}
+						/*
+							if y == maxValue {
+								maxValue = y - 1
+							}
+						*/
 					}
 				}
 
 			}
+			/*
+				if block, exists := blocksData[blockPosition{x, maxValue, z}]; exists {
+					block.lightLevel = 15
 
-			if block, exists := blocksData[blockPosition{x, maxValue, z}]; exists {
-				block.lightLevel = 15
+					blocksData[blockPosition{x, maxValue, z}] = block
+					exposedBlocks[blockPositionHoriz{x, z}] = maxValue
 
-				blocksData[blockPosition{x, maxValue, z}] = block
-				topMostBlocks = append(topMostBlocks, blockPosition{x, maxValue, z})
-
-			}
-
+				}
+			*/
 		}
 	}
-
-	for _, blockPos := range topMostBlocks {
-		propagateLight(blocksData, blockPos, 15)
-	}
+	/*
+		for blockXZ, blockY := range exposedBlocks {
+			propagateSunLight(pos, blocksData, blockPosition{blockXZ.x, blockY, blockXZ.z})
+		}
+	*/
 
 	return chunkData{
 		blocksData: blocksData,

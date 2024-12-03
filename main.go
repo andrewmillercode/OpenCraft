@@ -211,7 +211,7 @@ func main() {
 	var isSprintingState = "Sprinting: " + strconv.FormatBool(isSprinting)
 	var velString string = "Velocity: " + strconv.FormatFloat(mgl64.Round(float64(velocity[0]), 2), 'f', -1, 32) + " , " + strconv.FormatFloat(mgl64.Round(float64(velocity[1]), 2), 'f', -1, 32) + " , " + strconv.FormatFloat(mgl64.Round(float64(velocity[2]), 2), 'f', -1, 32)
 	var textObjects []text = []text{
-		createText(ctx, "+", 24, false, mgl32.Vec2{500, 20}, dst, opengl2d),
+		createText(ctx, "+", 16, false, mgl32.Vec2{800, 450}, dst, opengl2d),
 		createText(ctx, &fpsString, 24, true, mgl32.Vec2{10, 400}, dst, opengl2d),
 		createText(ctx, &velString, 24, true, mgl32.Vec2{10, 380}, dst, opengl2d),
 		createText(ctx, &isGroundedState, 24, true, mgl32.Vec2{10, 360}, dst, opengl2d),
@@ -228,7 +228,6 @@ func main() {
 		glfw.PollEvents()
 		//hide mouse
 		window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
-		//window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
 		//mouse look around
 		window.SetCursorPosCallback(mouseMoveCallback)
 		window.SetMouseButtonCallback(mouseInputCallback)
@@ -301,6 +300,7 @@ func main() {
 
 			for i, obj := range textObjects {
 				model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0).Mul4(mgl32.Scale3D(512, 512, 1))
+				//model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0)
 				modelLoc := gl.GetUniformLocation(opengl2d, gl.Str("model\x00"))
 				gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 				if obj.Update {
@@ -324,7 +324,11 @@ func main() {
 /*
 To-do:
 
-Add text rendering!!
+Fix lighting
+Add light rebuild on block edits
+Improve block break performance, chunk reload drops frames a ton
 
 
+MC lighting system:
+light level at 15 on blocks topmost vertically. for each block that is adjacent to another block (vertically) decrease by 1 -- when air gap, no decrease.
 */

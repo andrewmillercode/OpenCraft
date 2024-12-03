@@ -9,13 +9,13 @@ out vec4 color;
 uniform sampler2D texture0;
 float light;
 void main() {
-    vec4 baseTexture = texture2D(texture0, TexCoord);
-    light = (0.06 * LightLevel) + 0.06;
-
+    vec4 baseTexture = texture(texture0, TexCoord);
+    light = (1.0/15.0) * LightLevel;
+    //light levels go from 0(pitch black) to 15(max lighting)
    
      if (OverlayCoord.x != 0){
         color = baseTexture;
-        vec4 overlayTexture = texture2D(texture0, OverlayCoord);
+        vec4 overlayTexture = texture(texture0, OverlayCoord);
         overlayTexture.rgb *= TextureTint;
         color = mix(color,overlayTexture,overlayTexture.a);
        
