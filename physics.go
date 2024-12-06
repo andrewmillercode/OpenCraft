@@ -200,13 +200,25 @@ func raycast(action bool) {
 		if action {
 
 			if _, exists := chunks[ChunkPos].blocksData[pos]; exists {
-
+				chunks[ChunkPos].airBlocksData[pos] = airData{
+					lightLevel: 0,
+				}
 				delete(chunks[ChunkPos].blocksData, pos)
-				rebuildChunk(chunks[ChunkPos], ChunkPos)
-				isBordering, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
-				if isBordering {
-					for i := range borderingChunks {
-						rebuildChunk(chunks[borderingChunks[i]], borderingChunks[i])
+
+				_, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
+				borderingChunks = append(borderingChunks, ChunkPos)
+
+				for i := range borderingChunks {
+					propagateSunLight(borderingChunks[i], chunks[borderingChunks[i]])
+				}
+
+				for _, chunkPos := range borderingChunks {
+					vao, trisCount := createChunkVAO(chunks[chunkPos].blocksData, chunkPos)
+					chunks[chunkPos] = chunkData{
+						blocksData:    chunks[chunkPos].blocksData,
+						vao:           vao,
+						trisCount:     trisCount,
+						airBlocksData: chunks[chunkPos].airBlocksData,
 					}
 				}
 				return
@@ -238,18 +250,28 @@ func raycast(action bool) {
 				isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
 
 				if _, exists := chunks[ChunkPos].blocksData[pos]; !exists && !isCollidingWithPlayer {
-					blockDataTemp := chunks[ChunkPos].blocksData
-					blockDataTemp[pos] = blockData{
-						blockType:  0,
-						lightLevel: 10,
+
+					chunks[ChunkPos].blocksData[pos] = blockData{
+						blockType: 0,
 					}
-					chunks[ChunkPos] = chunkData{
-						blocksData: blockDataTemp,
-						vao:        chunks[ChunkPos].vao,
-						trisCount:  chunks[ChunkPos].trisCount,
+					delete(chunks[ChunkPos].airBlocksData, pos)
+
+					_, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
+					borderingChunks = append(borderingChunks, ChunkPos)
+
+					for i := range borderingChunks {
+						propagateSunLight(borderingChunks[i], chunks[borderingChunks[i]])
 					}
 
-					rebuildChunk(chunks[ChunkPos], ChunkPos)
+					for _, chunkPos := range borderingChunks {
+						vao, trisCount := createChunkVAO(chunks[chunkPos].blocksData, chunkPos)
+						chunks[chunkPos] = chunkData{
+							blocksData:    chunks[chunkPos].blocksData,
+							vao:           vao,
+							trisCount:     trisCount,
+							airBlocksData: chunks[chunkPos].airBlocksData,
+						}
+					}
 					return
 				}
 			}

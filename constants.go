@@ -3,15 +3,15 @@ package main
 var (
 	seed           int64   = 1
 	tickUpdateRate float32 = float32(1.0 / 30.0) //tick rate (30 TPS) ticks per second
-	runningSpeed   float32 = 3
+	runningSpeed   float32 = 1.3
 	flyingSpeed    float32 = 5
 	walkingSpeed   float32 = 2.3
 	jumpHeight     float32 = 0.25
 )
 var (
-	DirtID  uint8 = 0
-	GrassID uint8 = 1
-	StoneID uint8 = 2
+	DirtID  uint16 = 0
+	GrassID uint16 = 1
+	StoneID uint16 = 2
 )
 
 var CubeVertices []float32 = []float32{

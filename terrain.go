@@ -14,12 +14,13 @@ import (
 var chunks map[chunkPosition]chunkData = make(map[chunkPosition]chunkData)
 
 func rebuildChunk(chunk chunkData, chunkPos chunkPosition) {
-	propagateSunLight(chunkPos, chunk.blocksData)
+	//propagateSunLight(chunkPos, chunk.airBlocksData)
 	vao, trisCount := createChunkVAO(chunk.blocksData, chunkPos)
 	chunks[chunkPos] = chunkData{
-		blocksData: chunk.blocksData,
-		vao:        vao,
-		trisCount:  trisCount,
+		blocksData:    chunk.blocksData,
+		vao:           vao,
+		trisCount:     trisCount,
+		airBlocksData: chunk.airBlocksData,
 	}
 
 }
@@ -30,16 +31,16 @@ func createChunks() {
 			chunks[chunkPosition{x, z}] = chunk(chunkPosition{x, z})
 		}
 	}
-	for chunkPos, _chunkData := range chunks {
-		propagateSunLight(chunkPos, _chunkData.blocksData)
-
+	for pos, data := range chunks {
+		propagateSunLight(pos, data)
 	}
 	for chunkPos, _chunkData := range chunks {
 		vao, trisCount := createChunkVAO(_chunkData.blocksData, chunkPos)
 		chunks[chunkPos] = chunkData{
-			blocksData: _chunkData.blocksData,
-			vao:        vao,
-			trisCount:  trisCount,
+			blocksData:    _chunkData.blocksData,
+			vao:           vao,
+			trisCount:     trisCount,
+			airBlocksData: _chunkData.airBlocksData,
 		}
 	}
 }
@@ -75,8 +76,7 @@ func loadTextureAtlas(textureFilePath string) uint32 {
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_ANISOTROPY, maxAnisotropy)
 	return textureID
 }
-func getTextureCoords(blockID uint8, faceIndex uint8) []float32 {
-
+func getTextureCoords(blockID uint16, faceIndex uint8) []float32 {
 	// Calculate UV coordinates
 	u1 := float32(faceIndex*16) / float32(96)
 	v1 := float32(blockID*16) / float32(48)
@@ -88,218 +88,88 @@ func getTextureCoords(blockID uint8, faceIndex uint8) []float32 {
 }
 
 /*
-For each horizontal coordinate, iterate downwards until a block is hit or yLevel < limit.
+Sunlight spreads to other air blocks via flood fill. Every air block 'exposed' to sunlight is light level 15. Those not exposed to sunlight
+get sunlight propagating to them, decreasing 1 level for distance traveled (only cardinal directions).
 
-If block hit, set light = 15.
-If no block, check left right forward backward blocks. If block, light that one up as well.
+Each block face gets lit based on the air block adjacent to that face.
 */
-func propagateSunLight(chunkPos chunkPosition, blocksData map[blockPosition]blockData) {
-	visited := make(map[blockPosition]bool)
+type chunkBlockPositions struct {
+	chunkPos chunkPosition
+	blockPos blockPosition
+}
+
+func propagateSunLight(pos chunkPosition, data chunkData) {
+
+	var blocks []chunkBlockPositions
+
+	// Initialize light propagation
 	for x := uint8(0); x < 16; x++ {
 		for z := uint8(0); z < 16; z++ {
-			//height limit
-
-			skyLight := uint8(15)
-
 			for y := int16(128); y > -128; y-- {
 				blockPos := blockPosition{x, y, z}
-				if skyLight == 0 {
-					break
+				if _, exists := data.airBlocksData[blockPos]; exists {
+					blocks = append(blocks, chunkBlockPositions{pos, blockPos})
+					data.airBlocksData[blockPos] = airData{lightLevel: 15}
+					continue
 				}
-				if _, exists := blocksData[blockPos]; exists {
-					if visited[blockPos] {
-						continue
-					}
-					visited[blockPos] = true
-					blocksData[blockPos] = blockData{
-						blockType:  blocksData[blockPos].blockType,
-						lightLevel: skyLight,
-					}
+				break
 
-					if _, exists := blocksData[blockPosition{x, y - 1, z}]; exists {
+			}
+		}
+	}
 
-						skyLight--
+	head := 0
+	for head < len(blocks) {
+		cur := blocks[head]
+		head++
 
-					}
+		currentChunk := chunks[cur.chunkPos]
+		lightLevel := currentChunk.airBlocksData[cur.blockPos].lightLevel
 
-				} else {
+		if lightLevel <= 0 {
+			continue
+		}
 
-					//left
-					blockPos := blockPosition{x - 1, y, z}
-					if x == 0 {
-						//check neighbor chunk
-						if _, exists := chunks[chunkPosition{chunkPos.x - 1, chunkPos.z}].blocksData[blockPosition{15, blockPos.y, blockPos.z}]; exists {
+		for _, dir := range directions {
+			neighborPos := blockPosition{
+				x: uint8(int(cur.blockPos.x) + dir.x),
+				y: cur.blockPos.y + int16(dir.y),
+				z: uint8(int(cur.blockPos.z) + dir.z),
+			}
 
-							chunks[chunkPosition{chunkPos.x - 1, chunkPos.z}].blocksData[blockPosition{15, blockPos.y, blockPos.z}] = blockData{
-								blockType:  chunks[chunkPosition{chunkPos.x - 1, chunkPos.z}].blocksData[blockPosition{15, blockPos.y, blockPos.z}].blockType,
-								lightLevel: skyLight,
-							}
-
+			// Handle cross-chunk propagation (borders)
+			if int(cur.blockPos.x)+(dir.x) < 0 || int(cur.blockPos.x)+(dir.x) > 15 || int(cur.blockPos.z)+(dir.z) < 0 || int(cur.blockPos.z)+(dir.z) > 15 {
+				isBordering, borderingChunk, borderingBlock := ReturnBorderingAirBlock(cur.blockPos, cur.chunkPos)
+				if isBordering {
+					if borderingChunkData, exists := chunks[borderingChunk]; exists {
+						if borderingChunkData.airBlocksData[borderingBlock].lightLevel < lightLevel {
+							blocks = append(blocks, chunkBlockPositions{borderingChunk, borderingBlock})
+							borderingChunkData.airBlocksData[borderingBlock] = airData{lightLevel: uint8(float32(lightLevel) * 0.8)}
 						}
 					}
+				}
+				continue
+			}
 
-					if _, exists := blocksData[blockPos]; exists {
-						if visited[blockPos] {
-							continue
-						}
-						visited[blockPos] = true
-						blocksData[blockPos] = blockData{
-							blockType:  blocksData[blockPos].blockType,
-							lightLevel: skyLight,
-						}
-
-					}
-
-					//right
-					blockPos = blockPosition{x + 1, y, z}
-					if x == 15 {
-						//check neighbor chunk
-						if _, exists := chunks[chunkPosition{chunkPos.x + 1, chunkPos.z}].blocksData[blockPosition{0, y, z}]; exists {
-
-							chunks[chunkPosition{chunkPos.x + 1, chunkPos.z}].blocksData[blockPosition{0, y, z}] = blockData{
-								blockType:  chunks[chunkPosition{chunkPos.x + 1, chunkPos.z}].blocksData[blockPosition{0, y, z}].blockType,
-								lightLevel: skyLight,
-							}
-
-						}
-					}
-					if _, exists := blocksData[blockPos]; exists {
-						if visited[blockPos] {
-							continue
-						}
-						visited[blockPos] = true
-						blocksData[blockPos] = blockData{
-							blockType:  blocksData[blockPos].blockType,
-							lightLevel: skyLight,
-						}
-
-					}
-
-					//forward
-					blockPos = blockPosition{x, y, z + 1}
-					if z == 15 {
-						//check neighbor chunk
-						if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.z + 1}].blocksData[blockPosition{x, y, 0}]; exists {
-
-							chunks[chunkPosition{chunkPos.x, chunkPos.z + 1}].blocksData[blockPosition{x, y, 0}] = blockData{
-								blockType:  chunks[chunkPosition{chunkPos.x, chunkPos.z + 1}].blocksData[blockPosition{x, y, 0}].blockType,
-								lightLevel: skyLight,
-							}
-
-						}
-					}
-					if _, exists := blocksData[blockPos]; exists {
-						if visited[blockPos] {
-							continue
-						}
-						visited[blockPos] = true
-						blocksData[blockPos] = blockData{
-							blockType:  blocksData[blockPos].blockType,
-							lightLevel: skyLight,
-						}
-
-					}
-					//backward
-					blockPos = blockPosition{x, y, z - 1}
-					if z == 0 {
-						if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.z - 1}].blocksData[blockPosition{x, y, 15}]; exists {
-
-							chunks[chunkPosition{chunkPos.x, chunkPos.z - 1}].blocksData[blockPosition{x, y, 15}] = blockData{
-								blockType:  chunks[chunkPosition{chunkPos.x, chunkPos.z - 1}].blocksData[blockPosition{x, y, 15}].blockType,
-								lightLevel: skyLight,
-							}
-
-						}
-					}
-					if _, exists := blocksData[blockPos]; exists {
-						if visited[blockPos] {
-							continue
-						}
-						visited[blockPos] = true
-						blocksData[blockPos] = blockData{
-							blockType:  blocksData[blockPos].blockType,
-							lightLevel: skyLight,
-						}
-
-					}
-
+			// Handle same-chunk propagation
+			if neighborData, exists := currentChunk.airBlocksData[neighborPos]; exists {
+				if neighborData.lightLevel < lightLevel {
+					blocks = append(blocks, chunkBlockPositions{cur.chunkPos, neighborPos})
+					currentChunk.airBlocksData[neighborPos] = airData{lightLevel: uint8(float32(lightLevel) * 0.8)}
 				}
 			}
 		}
 	}
 
 }
-func propagateLight(chunkPos chunkPosition, blocksData map[blockPosition]blockData, startPos blockPosition, initialLight uint8) {
-	/*
-		if initialLight <= 4 {
-			return
-		}
 
-		type queueEntry struct {
-			pos        blockPosition
-			lightLevel uint8
-		}
-
-		directions := []blockPosition{
-			{1, 0, 0}, {-1, 0, 0}, // X-axis
-			{0, 1, 0}, {0, -1, 0}, // Y-axis
-			{0, 0, 1}, {0, 0, -1}, // Z-axis
-
-		}
-
-		queue := []queueEntry{{startPos, initialLight}}
-		visited := make(map[blockPosition]bool)
-
-		for len(queue) > 0 {
-			current := queue[len(queue)-1]
-			queue = queue[:len(queue)-1]
-
-			if visited[current.pos] {
-				continue
-			}
-			visited[current.pos] = true
-
-			blocksData[current.pos] = blockData{
-				blockType:  blocksData[current.pos].blockType,
-				lightLevel: current.lightLevel,
-			}
-
-			for _, dir := range directions {
-				neighborPos := blockPosition{
-					x: current.pos.x + dir.x,
-					y: current.pos.y + dir.y,
-					z: current.pos.z + dir.z,
-				}
-
-				if neighborData, exists := blocksData[neighborPos]; exists {
-					newLightLevel := uint8(float32(current.lightLevel) * 0.8)
-					if newLightLevel > neighborData.lightLevel {
-						queue = append(queue, queueEntry{neighborPos, newLightLevel})
-					}
-				} else {
-
-							rebuildChunk(chunks[ChunkPos], ChunkPos)
-							isBordering, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
-							if isBordering {
-								for i := range borderingChunks {
-									rebuildChunk(chunks[borderingChunks[i]], borderingChunks[i])
-								}
-							}
-
-						isBordering, borderingChunks := ReturnBorderingChunks(neighborPos, chunkPos)
-						if isBordering {
-							for i := range borderingChunks {
-								propagateLight(borderingChunks[i], chunks[borderingChunks[i]].blocksData, neighborPos, uint8(float32(current.lightLevel)*0.8))
-
-							}
-						}
-
-				}
-			}
-
-			}*/
+var directions = []Vec3Int{
+	{0, 1, 0}, {0, -1, 0}, // Y-axis
+	{1, 0, 0}, {-1, 0, 0}, // X-axis
+	{0, 0, 1}, {0, 0, -1}, // Z-axis
 
 }
+
 func fractalNoise(x int32, z int32, amplitude float32, octaves int, lacunarity float32, persistence float32, scale float32) int16 {
 	val := int16(0)
 	x1 := float32(x)
@@ -338,13 +208,73 @@ func fractalNoise3D(x int32, y int32, z int32, amplitude float32, scale float32)
 
 }
 
+// face = 0(front) 1(back) 2(right) 3(left) 4(up) 5(down)
+func getAdjacentAirBlockFromFace(key blockPosition, chunkPos chunkPosition, face uint8) float32 {
+
+	//edge cases
+
+	if face == 0 {
+		if key.z == 15 {
+			if airData, exists := chunks[chunkPosition{chunkPos.x, chunkPos.z + 1}].airBlocksData[blockPosition{key.x, key.y, 0}]; exists {
+				return float32(airData.lightLevel)
+			}
+		}
+		if airData, exists := chunks[chunkPos].airBlocksData[blockPosition{key.x, key.y, key.z + 1}]; exists {
+			return float32(airData.lightLevel)
+		}
+	}
+	if face == 1 {
+		if key.z == 0 {
+			if airData, exists := chunks[chunkPosition{chunkPos.x, chunkPos.z - 1}].airBlocksData[blockPosition{key.x, key.y, 15}]; exists {
+				return float32(airData.lightLevel)
+			}
+		}
+		if airData, exists := chunks[chunkPos].airBlocksData[blockPosition{key.x, key.y, key.z - 1}]; exists {
+			return float32(airData.lightLevel)
+		}
+	}
+	if face == 2 {
+		if key.x == 15 {
+			if airData, exists := chunks[chunkPosition{chunkPos.x + 1, chunkPos.z}].airBlocksData[blockPosition{0, key.y, key.z}]; exists {
+				return float32(airData.lightLevel)
+			}
+		}
+		if airData, exists := chunks[chunkPos].airBlocksData[blockPosition{key.x + 1, key.y, key.z}]; exists {
+			return float32(airData.lightLevel)
+		}
+	}
+	if face == 3 {
+		if key.x == 0 {
+
+			if airData, exists := chunks[chunkPosition{chunkPos.x - 1, chunkPos.z}].airBlocksData[blockPosition{15, key.y, key.z}]; exists {
+				return float32(airData.lightLevel)
+			}
+		}
+		if airData, exists := chunks[chunkPos].airBlocksData[blockPosition{key.x - 1, key.y, key.z}]; exists {
+			return float32(airData.lightLevel)
+		}
+	}
+	if face == 4 {
+		if airData, exists := chunks[chunkPos].airBlocksData[blockPosition{key.x, key.y + 1, key.z}]; exists {
+			return float32(airData.lightLevel)
+		}
+	}
+	if face == 5 {
+		if airData, exists := chunks[chunkPos].airBlocksData[blockPosition{key.x, key.y - 1, key.z}]; exists {
+			return float32(airData.lightLevel)
+		}
+	}
+	// no air block found
+	return -1
+}
+
 func createChunkVAO(chunkData map[blockPosition]blockData, chunkPos chunkPosition) (uint32, uint32) {
 
 	var chunkVertices []float32
 	grassTint := mgl32.Vec3{0.486, 0.741, 0.419}
 	noTint := mgl32.Vec3{1.0, 1.0, 1.0}
-	for key := range chunkData {
-		self := chunkData[blockPosition{key.x, key.y, key.z}]
+	for key, self := range chunkData {
+
 		_, top := chunkData[blockPosition{key.x, key.y + 1, key.z}]
 		_, bot := chunkData[blockPosition{key.x, key.y - 1, key.z}]
 		_, l := chunkData[blockPosition{key.x - 1, key.y, key.z}]
@@ -371,22 +301,24 @@ func createChunkVAO(chunkData map[blockPosition]blockData, chunkPos chunkPositio
 				if !f {
 
 					if key.z == 15 {
-						////rowFront := col + 1
-						//adjustedRow := (config.NumOfChunks * row)
-
 						_, blockAdjChunk := chunks[chunkPosition{chunkPos.x, chunkPos.z + 1}].blocksData[blockPosition{key.x, key.y, 0}]
 						if blockAdjChunk {
 							continue
 						}
 					}
+
 					textureUV := getTextureCoords(chunkData[key].blockType, 2)
+					lightLevel := getAdjacentAirBlockFromFace(key, chunkPos, 0)
+					if lightLevel == -1 {
+						continue
+					}
 					if self.blockType == GrassID {
 						curTint = grassTint
 						textureUVOverlay := getTextureCoords(chunkData[key].blockType, 5)
-						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel)*0.6, curTint[0], curTint[1], curTint[2], textureUVOverlay[u], textureUVOverlay[v])
-					} else {
+						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], lightLevel*0.6, curTint[0], curTint[1], curTint[2], textureUVOverlay[u], textureUVOverlay[v])
 
-						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel)*0.6, curTint[0], curTint[1], curTint[2], 0, 0)
+					} else {
+						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], lightLevel*0.6, curTint[0], curTint[1], curTint[2], 0, 0)
 					}
 				}
 				continue
@@ -396,22 +328,25 @@ func createChunkVAO(chunkData map[blockPosition]blockData, chunkPos chunkPositio
 
 				if !b {
 					if key.z == 0 {
-						//rowFront := col - 1
-						//adjustedRow := (config.NumOfChunks * row)
 						_, blockAdjChunk := chunks[chunkPosition{chunkPos.x, chunkPos.z - 1}].blocksData[blockPosition{key.x, key.y, 15}]
 						if blockAdjChunk {
 							continue
 						}
 					}
 					textureUV := getTextureCoords(chunkData[key].blockType, 3)
+					lightLevel := getAdjacentAirBlockFromFace(key, chunkPos, 1)
+					if lightLevel == -1 {
+						continue
+					}
 					if self.blockType == GrassID {
 						curTint = grassTint
 						textureUVOverlay := getTextureCoords(chunkData[key].blockType, 5)
-						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel)*0.6, curTint[0], curTint[1], curTint[2], textureUVOverlay[u], textureUVOverlay[v])
-					} else {
+						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], lightLevel*0.6, curTint[0], curTint[1], curTint[2], textureUVOverlay[u], textureUVOverlay[v])
 
-						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel)*0.6, curTint[0], curTint[1], curTint[2], 0, 0)
+					} else {
+						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], lightLevel*0.6, curTint[0], curTint[1], curTint[2], 0, 0)
 					}
+
 				}
 				continue
 			}
@@ -427,12 +362,17 @@ func createChunkVAO(chunkData map[blockPosition]blockData, chunkPos chunkPositio
 						}
 					}
 					textureUV := getTextureCoords(chunkData[key].blockType, 4)
+					lightLevel := getAdjacentAirBlockFromFace(key, chunkPos, 3)
+					if lightLevel == -1 {
+						continue
+					}
 					if self.blockType == GrassID {
 						curTint = grassTint
 						textureUVOverlay := getTextureCoords(chunkData[key].blockType, 5)
-						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel)*0.8, curTint[0], curTint[1], curTint[2], textureUVOverlay[u], textureUVOverlay[v])
+						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], lightLevel*0.6, curTint[0], curTint[1], curTint[2], textureUVOverlay[u], textureUVOverlay[v])
+
 					} else {
-						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel)*0.8, curTint[0], curTint[1], curTint[2], 0, 0)
+						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], lightLevel*0.6, curTint[0], curTint[1], curTint[2], 0, 0)
 					}
 
 				}
@@ -443,23 +383,25 @@ func createChunkVAO(chunkData map[blockPosition]blockData, chunkPos chunkPositio
 
 				if !r {
 					if key.x == 15 {
-						//rowFront := row + 1
-						//adjustedRow := (config.NumOfChunks * rowFront)
 						_, blockAdjChunk := chunks[chunkPosition{chunkPos.x + 1, chunkPos.z}].blocksData[blockPosition{0, key.y, key.z}]
 						if blockAdjChunk {
 							continue
 						}
 					}
 
-					textureUV := getTextureCoords(chunkData[key].blockType, 5)
-
+					lightLevel := getAdjacentAirBlockFromFace(key, chunkPos, 2)
+					if lightLevel == -1 {
+						continue
+					}
 					if self.blockType == GrassID {
 						curTint = grassTint
-						textureUV := getTextureCoords(chunkData[key].blockType, 2)
+						textureUV := getTextureCoords(chunkData[key].blockType, 4)
 						textureUVOverlay := getTextureCoords(chunkData[key].blockType, 5)
-						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel)*0.8, curTint[0], curTint[1], curTint[2], textureUVOverlay[u], textureUVOverlay[v])
+						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], lightLevel*0.6, curTint[0], curTint[1], curTint[2], textureUVOverlay[u], textureUVOverlay[v])
+
 					} else {
-						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel)*0.8, curTint[0], curTint[1], curTint[2], 0, 0)
+						textureUV := getTextureCoords(chunkData[key].blockType, 5)
+						chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], lightLevel*0.6, curTint[0], curTint[1], curTint[2], 0, 0)
 					}
 				}
 
@@ -472,8 +414,12 @@ func createChunkVAO(chunkData map[blockPosition]blockData, chunkPos chunkPositio
 						curTint = grassTint
 					}
 					textureUV := getTextureCoords(chunkData[key].blockType, 0)
+					lightLevel := getAdjacentAirBlockFromFace(key, chunkPos, 4)
+					if lightLevel == -1 {
+						continue
+					}
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], lightLevel, curTint[0], curTint[1], curTint[2], 0, 0)
 
-					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel), curTint[0], curTint[1], curTint[2], 0, 0)
 				}
 				continue
 			}
@@ -481,7 +427,13 @@ func createChunkVAO(chunkData map[blockPosition]blockData, chunkPos chunkPositio
 			if i >= (5*18) && i <= (5*18)+15 {
 				if !bot && key.y != -128 {
 					textureUV := getTextureCoords(chunkData[key].blockType, 1)
-					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], float32(self.lightLevel)*0.5, curTint[0], curTint[1], curTint[2], 0, 0)
+					lightLevel := getAdjacentAirBlockFromFace(key, chunkPos, 5)
+					if lightLevel == -1 {
+						continue
+					}
+
+					chunkVertices = append(chunkVertices, x, y, z, textureUV[u], textureUV[v], lightLevel*0.5, curTint[0], curTint[1], curTint[2], 0, 0)
+
 				}
 				continue
 			}

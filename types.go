@@ -7,25 +7,27 @@ type blockPosition struct {
 	y int16
 	z uint8
 }
-type blockPositionHoriz struct {
-	x uint8
-	z uint8
+type Vec3Int struct {
+	x int
+	y int
+	z int
 }
-
 type chunkPosition struct {
 	x int32
 	z int32
 }
 
 type blockData struct {
-	blockType  uint8
+	blockType uint16
+}
+type airData struct {
 	lightLevel uint8
 }
-
 type chunkData struct {
-	blocksData map[blockPosition]blockData
-	vao        uint32
-	trisCount  uint32
+	airBlocksData map[blockPosition]airData
+	blocksData    map[blockPosition]blockData
+	vao           uint32
+	trisCount     uint32
 }
 
 func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []chunkPosition) {
@@ -59,9 +61,31 @@ func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []c
 	return false, borderingChunks
 
 }
+func ReturnBorderingAirBlock(pos blockPosition, chunkPos chunkPosition) (bool, chunkPosition, blockPosition) {
 
+	if _, exists := chunks[chunkPosition{chunkPos.x + 1, chunkPos.z}].airBlocksData[blockPosition{0, pos.y, pos.z}]; exists {
+
+		return true, chunkPosition{chunkPos.x + 1, chunkPos.z}, blockPosition{0, pos.y, pos.z}
+	}
+	if _, exists := chunks[chunkPosition{chunkPos.x - 1, chunkPos.z}].airBlocksData[blockPosition{15, pos.y, pos.z}]; exists {
+
+		return true, chunkPosition{chunkPos.x - 1, chunkPos.z}, blockPosition{15, pos.y, pos.z}
+	}
+	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.z + 1}].airBlocksData[blockPosition{pos.x, pos.y, 0}]; exists {
+
+		return true, chunkPosition{chunkPos.x, chunkPos.z + 1}, blockPosition{pos.x, pos.y, 0}
+	}
+	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.z - 1}].airBlocksData[blockPosition{pos.x, pos.y, 15}]; exists {
+
+		return true, chunkPosition{chunkPos.x, chunkPos.z - 1}, blockPosition{pos.x, pos.y, 15}
+	}
+
+	return false, chunkPosition{}, blockPosition{}
+
+}
 func chunk(pos chunkPosition) chunkData {
 	var blocksData map[blockPosition]blockData = make(map[blockPosition]blockData)
+	var airBlocksData map[blockPosition]airData = make(map[blockPosition]airData)
 	//blocks that are touching sky
 	//var exposedBlocks map[blockPositionHoriz]int16 = make(map[blockPositionHoriz]int16)
 	var scale float32 = 100 // Adjust as needed for terrain detail
@@ -71,68 +95,59 @@ func chunk(pos chunkPosition) chunkData {
 		for z := uint8(0); z < 16; z++ {
 
 			noiseValue := fractalNoise(int32(x)+(pos.x*16), int32(z)+(pos.z*16), amplitude, 4, 1.5, 0.5, scale)
-			//maxValue := noiseValue
-			for y := noiseValue; y >= int16(-128); y-- {
 
-				//determine block type
-				blockType := DirtID
-				fluctuation := int16(random.Float32() * 5)
-
-				if y < ((noiseValue - 6) + fluctuation) {
-					blockType = DirtID
-				}
-				if y < ((noiseValue - 10) + fluctuation) {
-					blockType = StoneID
-				}
-
-				//top most layer
-				if y == noiseValue {
-					blocksData[blockPosition{x, y, z}] = blockData{
-						blockType:  GrassID,
-						lightLevel: 0,
-					}
-				} else {
-					blocksData[blockPosition{x, y, z}] = blockData{
-						blockType:  blockType,
-						lightLevel: 0,
+			for y := int16(128); y >= int16(-128); y-- {
+				if y > noiseValue {
+					airBlocksData[blockPosition{x, y, z}] = airData{
+						lightLevel: 15,
 					}
 				}
+				if y <= noiseValue {
+					//determine block type
+					blockType := DirtID
+					fluctuation := int16(random.Float32() * 5)
 
-				if y < 0 {
-					isCave := fractalNoise3D(int32(x)+(pos.x*16), int32(y), int32(z)+(pos.z*16), 0.7, 8)
+					if y < ((noiseValue - 6) + fluctuation) {
+						blockType = DirtID
+					}
+					if y < ((noiseValue - 10) + fluctuation) {
+						blockType = StoneID
+					}
 
-					if isCave > 0.1 {
-						delete(blocksData, blockPosition{x, y, z})
-						/*
-							if y == maxValue {
-								maxValue = y - 1
+					//top most layer
+					if y == noiseValue {
+						blocksData[blockPosition{x, y, z}] = blockData{
+							blockType: GrassID,
+						}
+					} else {
+						blocksData[blockPosition{x, y, z}] = blockData{
+							blockType: blockType,
+						}
+					}
+
+					if y < 0 {
+						isCave := fractalNoise3D(int32(x)+(pos.x*16), int32(y), int32(z)+(pos.z*16), 0.7, 8)
+
+						if isCave > 0.1 {
+							delete(blocksData, blockPosition{x, y, z})
+							airBlocksData[blockPosition{x, y, z}] = airData{
+								lightLevel: 0,
 							}
-						*/
+
+						}
 					}
 				}
 
 			}
-			/*
-				if block, exists := blocksData[blockPosition{x, maxValue, z}]; exists {
-					block.lightLevel = 15
 
-					blocksData[blockPosition{x, maxValue, z}] = block
-					exposedBlocks[blockPositionHoriz{x, z}] = maxValue
-
-				}
-			*/
 		}
 	}
-	/*
-		for blockXZ, blockY := range exposedBlocks {
-			propagateSunLight(pos, blocksData, blockPosition{blockXZ.x, blockY, blockXZ.z})
-		}
-	*/
 
 	return chunkData{
-		blocksData: blocksData,
-		vao:        0,
-		trisCount:  0,
+		blocksData:    blocksData,
+		vao:           0,
+		trisCount:     0,
+		airBlocksData: airBlocksData,
 	}
 }
 

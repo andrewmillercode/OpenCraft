@@ -103,7 +103,7 @@ func movement(window *glfw.Window) {
 	if isFlying {
 		movementSpeed = flyingSpeed
 		if window.GetKey(glfw.KeySpace) == glfw.Press {
-			velocity[1] += 15 * deltaTime
+			velocity[1] += movementSpeed * deltaTime
 		}
 		if window.GetKey(glfw.KeyLeftControl) == glfw.Press {
 			velocity[1] -= movementSpeed * deltaTime
@@ -111,7 +111,7 @@ func movement(window *glfw.Window) {
 	}
 
 	if window.GetKey(glfw.KeyLeftShift) == glfw.Press {
-		movementSpeed = runningSpeed
+		movementSpeed *= runningSpeed
 		isSprinting = true
 	}
 
