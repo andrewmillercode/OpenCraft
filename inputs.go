@@ -7,6 +7,10 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 )
 
+var inputDelayAccumulator float32
+
+var inputUpdateRate float32 = float32(1.0 / 5.0)
+
 func input(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 
 	if action == glfw.Press {
@@ -97,6 +101,16 @@ func mouseInputCallback(window *glfw.Window, button glfw.MouseButton, action glf
 
 // Movement inputs, gets checked each frame for fast responses.
 func movement(window *glfw.Window) {
+
+	for inputDelayAccumulator >= inputUpdateRate {
+		inputDelayAccumulator -= inputUpdateRate
+		if window.GetMouseButton(glfw.MouseButtonRight) == glfw.Press {
+			raycast(false)
+		}
+		if window.GetMouseButton(glfw.MouseButtonLeft) == glfw.Press {
+			raycast(true)
+		}
+	}
 
 	movementSpeed = walkingSpeed
 

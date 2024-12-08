@@ -23,76 +23,78 @@ func collisions(chunks map[chunkPosition]chunkData) {
 
 	for x := -1; x <= 1; x++ {
 		for z := -1; z <= 1; z++ {
-			currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/16))) + int32(x), int32(math.Floor(float64(cameraPosition[2]/16))) + int32(z)}
-			if _, exists := chunks[currentPlayerChunkPos]; exists {
+			for y := -1; y <= 1; y++ {
+				currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/16))) + int32(x), int32(math.Floor(float64(cameraPosition[1]/16))) + int32(y), int32(math.Floor(float64(cameraPosition[2]/16))) + int32(z)}
+				if _, exists := chunks[currentPlayerChunkPos]; exists {
 
-				chunk := chunks[currentPlayerChunkPos]
-				for i := 0; i < 3; i++ {
-					var colliders []collider
-					for blockX := pIntX - 3; blockX < pIntX+3; blockX++ {
-						for blockZ := pIntZ - 3; blockZ < pIntZ+3; blockZ++ {
-							for blockY := pIntY - 3; blockY < pIntY+3; blockY++ {
+					chunk := chunks[currentPlayerChunkPos]
+					for i := 0; i < 3; i++ {
+						var colliders []collider
+						for blockX := pIntX - 3; blockX < pIntX+3; blockX++ {
+							for blockZ := pIntZ - 3; blockZ < pIntZ+3; blockZ++ {
+								for blockY := pIntY - 3; blockY < pIntY+3; blockY++ {
 
-								relativeBlockPosition := blockPosition{uint8(blockX - (currentPlayerChunkPos.x * 16)), int16(blockY), uint8(blockZ - (currentPlayerChunkPos.z * 16))}
+									relativeBlockPosition := blockPosition{uint8(blockX - (currentPlayerChunkPos.x * 16)), uint8(blockY - int32(currentPlayerChunkPos.y*16)), uint8(blockZ - (currentPlayerChunkPos.z * 16))}
 
-								if _, exists := chunk.blocksData[relativeBlockPosition]; exists {
+									if _, exists := chunk.blocksData[relativeBlockPosition]; exists {
 
-									floatBlockPos := mgl32.Vec3{float32(relativeBlockPosition.x), float32(relativeBlockPosition.y), float32(relativeBlockPosition.z)}
-									absoluteBlockPosition := mgl32.Vec3{float32(currentPlayerChunkPos.x*16) + floatBlockPos.X(), floatBlockPos.Y(), float32(currentPlayerChunkPos.z*16) + floatBlockPos.Z()}
+										floatBlockPos := mgl32.Vec3{float32(relativeBlockPosition.x), float32(relativeBlockPosition.y), float32(relativeBlockPosition.z)}
+										absoluteBlockPosition := mgl32.Vec3{float32(currentPlayerChunkPos.x*16) + floatBlockPos.X(), float32(currentPlayerChunkPos.y*16) + floatBlockPos.Y(), float32(currentPlayerChunkPos.z*16) + floatBlockPos.Z()}
 
-									blockAABB := AABB(
-										absoluteBlockPosition.Sub(mgl32.Vec3{0.5, 0.5, 0.5}),
-										absoluteBlockPosition.Add(mgl32.Vec3{0.5, 0.5, 0.5}),
-									)
-									entry, normal := collide(playerBox, blockAABB)
+										blockAABB := AABB(
+											absoluteBlockPosition.Sub(mgl32.Vec3{0.5, 0.5, 0.5}),
+											absoluteBlockPosition.Add(mgl32.Vec3{0.5, 0.5, 0.5}),
+										)
+										entry, normal := collide(playerBox, blockAABB)
 
-									if normal == nil {
-										continue
+										if normal == nil {
+											continue
+										}
+
+										colliders = append(colliders, Collider(entry, normal))
 									}
-
-									colliders = append(colliders, Collider(entry, normal))
 								}
 							}
 						}
-					}
 
-					if len(colliders) <= 0 {
-						break
-					}
-					var minEntry float32 = mgl32.InfPos
-					var minNormal []int
-					for _, collider := range colliders {
-						if collider.Time < minEntry {
-							minEntry = collider.Time
-							minNormal = collider.Normal
+						if len(colliders) <= 0 {
+							break
 						}
-					}
-
-					minEntry -= 0.001
-					if len(minNormal) > 0 {
-						if minNormal[0] != 0 {
-
-							cameraPosition[0] += velocity.X() * minEntry
-							velocity[0] = 0
-						}
-						if minNormal[1] != 0 {
-
-							cameraPosition[1] += velocity.Y() * minEntry
-							velocity[1] = 0
-
-							if minNormal[1] >= 0 {
-								isOnGround = true
+						var minEntry float32 = mgl32.InfPos
+						var minNormal []int
+						for _, collider := range colliders {
+							if collider.Time < minEntry {
+								minEntry = collider.Time
+								minNormal = collider.Normal
 							}
-
 						}
-						if minNormal[2] != 0 {
 
-							cameraPosition[2] += velocity.Z() * minEntry
-							velocity[2] = 0
+						minEntry -= 0.001
+						if len(minNormal) > 0 {
+							if minNormal[0] != 0 {
+
+								cameraPosition[0] += velocity.X() * minEntry
+								velocity[0] = 0
+							}
+							if minNormal[1] != 0 {
+
+								cameraPosition[1] += velocity.Y() * minEntry
+								velocity[1] = 0
+
+								if minNormal[1] >= 0 {
+									isOnGround = true
+								}
+
+							}
+							if minNormal[2] != 0 {
+
+								cameraPosition[2] += velocity.Z() * minEntry
+								velocity[2] = 0
+							}
 						}
 					}
-				}
 
+				}
 			}
 		}
 
@@ -184,12 +186,13 @@ func raycast(action bool) {
 
 		ChunkPos := chunkPosition{
 			int32(math.Floor(float64(hitPoint[0] / 16))),
+			int32(math.Floor(float64(hitPoint[1] / 16))),
 			int32(math.Floor(float64(hitPoint[2] / 16))),
 		}
 
 		pos := blockPosition{
 			uint8(math.Floor(float64(hitPoint[0]) - float64(ChunkPos.x*16))),
-			int16(math.Floor(float64(hitPoint[1]))),
+			uint8(math.Floor(float64(hitPoint[1]) - float64(ChunkPos.y*16))),
 			uint8(math.Floor(float64(hitPoint[2]) - float64(ChunkPos.z*16))),
 		}
 		absPos := mgl32.Vec3{
@@ -209,14 +212,18 @@ func raycast(action bool) {
 				borderingChunks = append(borderingChunks, ChunkPos)
 
 				for i := range borderingChunks {
-					propagateSunLight(borderingChunks[i], chunks[borderingChunks[i]])
+
+					//quickLightingRecalc(chunkPositionLighting{borderingChunks[i].x, borderingChunks[i].z}, borderingChunks[i])
+					propagateSunLight(chunkPositionLighting{borderingChunks[i].x, borderingChunks[i].z})
 				}
 
 				for _, chunkPos := range borderingChunks {
-					vao, trisCount := createChunkVAO(chunks[chunkPos].blocksData, chunkPos)
+
+					hasBlocks, vao, trisCount := createChunkVAO(chunks[chunkPos].blocksData, chunkPos)
 					chunks[chunkPos] = chunkData{
 						blocksData:    chunks[chunkPos].blocksData,
 						vao:           vao,
+						hasBlocks:     hasBlocks,
 						trisCount:     trisCount,
 						airBlocksData: chunks[chunkPos].airBlocksData,
 					}
@@ -242,8 +249,13 @@ func raycast(action bool) {
 			}
 		}
 		if !action {
-			tempChunkPos := chunkPosition{int32(math.Floor(float64(hitPoint[0] / 16))), int32(math.Floor(float64(hitPoint[2] / 16)))}
-			tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*16))), int16(math.Floor(float64(hitPoint[1]))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*16)))}
+
+			tempChunkPos := chunkPosition{
+				int32(math.Floor(float64(hitPoint[0] / 16))),
+				int32(math.Floor(float64(hitPoint[1] / 16))),
+				int32(math.Floor(float64(hitPoint[2] / 16))),
+			}
+			tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*16))), uint8(math.Floor(float64(hitPoint[1]) - float64(tempChunkPos.y*16))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*16)))}
 
 			if _, exists := chunks[tempChunkPos].blocksData[tempPos]; exists {
 
@@ -258,20 +270,24 @@ func raycast(action bool) {
 
 					_, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
 					borderingChunks = append(borderingChunks, ChunkPos)
-
+					shadowsOnPlacedBlocks(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
 					for i := range borderingChunks {
-						propagateSunLight(borderingChunks[i], chunks[borderingChunks[i]])
+
+						//quickLightingRecalc(chunkPositionLighting{borderingChunks[i].x, borderingChunks[i].z}, borderingChunks[i])
+						propagateSunLight(chunkPositionLighting{borderingChunks[i].x, borderingChunks[i].z})
 					}
 
 					for _, chunkPos := range borderingChunks {
-						vao, trisCount := createChunkVAO(chunks[chunkPos].blocksData, chunkPos)
+						hasBlocks, vao, trisCount := createChunkVAO(chunks[chunkPos].blocksData, chunkPos)
 						chunks[chunkPos] = chunkData{
 							blocksData:    chunks[chunkPos].blocksData,
 							vao:           vao,
+							hasBlocks:     hasBlocks,
 							trisCount:     trisCount,
 							airBlocksData: chunks[chunkPos].airBlocksData,
 						}
 					}
+
 					return
 				}
 			}

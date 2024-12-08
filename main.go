@@ -26,7 +26,7 @@ var (
 	lastY                  float64
 	firstMouse             bool = true
 	movementSpeed          float32
-	cameraPosition         = mgl32.Vec3{0.0, 25, 15}
+	cameraPosition         = mgl32.Vec3{0.0, 50, 15}
 	cameraPositionLerped   = cameraPosition
 	cameraFront            = mgl32.Vec3{0.0, 0.0, -1.0}
 	orientationFront       = mgl32.Vec3{0.0, 0.0, -1.0}
@@ -225,6 +225,7 @@ func main() {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		deltaTime = float32(time.Since(previousFrame).Seconds())
 		previousFrame = time.Now()
+		inputDelayAccumulator += deltaTime
 		tickAccumulator += deltaTime
 		glfw.PollEvents()
 		//hide mouse
@@ -235,6 +236,7 @@ func main() {
 		window.SetKeyCallback(input)
 
 		movement(window)
+
 		for tickAccumulator >= tickUpdateRate {
 			previousCameraPosition = cameraPosition
 			velocityDamping(0.35)
@@ -279,14 +281,16 @@ func main() {
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
 
 		for chunkPos, chunkData := range chunks {
-			// Generate model matrix with translation
-			model := mgl32.Translate3D(float32(chunkPos.x*16), 0, float32(chunkPos.z*16))
-			modelLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
-			gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 
-			// Draw the cube
-			gl.BindVertexArray(chunkData.vao)
-			gl.DrawArrays(gl.TRIANGLES, 0, int32(chunkData.trisCount))
+			if chunkData.hasBlocks {
+
+				model := mgl32.Translate3D(float32(chunkPos.x*16), float32(chunkPos.y*16), float32(chunkPos.z*16))
+				modelLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
+				gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
+
+				gl.BindVertexArray(chunkData.vao)
+				gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
+			}
 		}
 		if showDebug {
 			//UI RENDERING STAGE
