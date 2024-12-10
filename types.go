@@ -182,7 +182,7 @@ func chunk(pos chunkPosition) chunkData {
 	return chunkData{
 		blocksData:    blocksData,
 		airBlocksData: airBlocksData,
-		hasBlocks:     false,
+		hasBlocks:     len(airBlocksData) >= 4096,
 		vao:           0,
 		trisCount:     0,
 	}

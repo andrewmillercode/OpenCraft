@@ -23,7 +23,7 @@ func collisions(chunks map[chunkPosition]chunkData) {
 
 	for x := -1; x <= 1; x++ {
 		for z := -1; z <= 1; z++ {
-			for y := -1; y <= 1; y++ {
+			for y := -3; y <= 3; y++ {
 				currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/16))) + int32(x), int32(math.Floor(float64(cameraPosition[1]/16))) + int32(y), int32(math.Floor(float64(cameraPosition[2]/16))) + int32(z)}
 				if _, exists := chunks[currentPlayerChunkPos]; exists {
 
@@ -204,18 +204,14 @@ func raycast(action bool) {
 
 			if _, exists := chunks[ChunkPos].blocksData[pos]; exists {
 				chunks[ChunkPos].airBlocksData[pos] = airData{
-					lightLevel: 0,
+					lightLevel: 3,
 				}
 				delete(chunks[ChunkPos].blocksData, pos)
 
 				_, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
 				borderingChunks = append(borderingChunks, ChunkPos)
 
-				for i := range borderingChunks {
-
-					//quickLightingRecalc(chunkPositionLighting{borderingChunks[i].x, borderingChunks[i].z}, borderingChunks[i])
-					propagateSunLight(chunkPositionLighting{borderingChunks[i].x, borderingChunks[i].z})
-				}
+				quickLightingPropagation(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
 
 				for _, chunkPos := range borderingChunks {
 
@@ -273,8 +269,8 @@ func raycast(action bool) {
 					shadowsOnPlacedBlocks(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
 					for i := range borderingChunks {
 
-						//quickLightingRecalc(chunkPositionLighting{borderingChunks[i].x, borderingChunks[i].z}, borderingChunks[i])
 						propagateSunLight(chunkPositionLighting{borderingChunks[i].x, borderingChunks[i].z})
+
 					}
 
 					for _, chunkPos := range borderingChunks {
