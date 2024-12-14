@@ -267,11 +267,6 @@ func raycast(action bool) {
 					_, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
 					borderingChunks = append(borderingChunks, ChunkPos)
 					shadowsOnPlacedBlocks(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
-					for i := range borderingChunks {
-
-						propagateSunLight(chunkPositionLighting{borderingChunks[i].x, borderingChunks[i].z})
-
-					}
 
 					for _, chunkPos := range borderingChunks {
 						hasBlocks, vao, trisCount := createChunkVAO(chunks[chunkPos].blocksData, chunkPos)

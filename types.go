@@ -90,28 +90,34 @@ func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []c
 func ReturnBorderingAirBlock(pos blockPosition, chunkPos chunkPosition) (bool, chunkPosition, blockPosition) {
 
 	if _, exists := chunks[chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}].airBlocksData[blockPosition{0, pos.y, pos.z}]; exists {
-
-		return true, chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}, blockPosition{0, pos.y, pos.z}
+		if pos.x == 15 {
+			return true, chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}, blockPosition{0, pos.y, pos.z}
+		}
 	}
 	if _, exists := chunks[chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}].airBlocksData[blockPosition{15, pos.y, pos.z}]; exists {
-
-		return true, chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}, blockPosition{15, pos.y, pos.z}
+		if pos.x == 0 {
+			return true, chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}, blockPosition{15, pos.y, pos.z}
+		}
 	}
 	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}].airBlocksData[blockPosition{pos.x, pos.y, 0}]; exists {
-
-		return true, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}, blockPosition{pos.x, pos.y, 0}
+		if pos.z == 15 {
+			return true, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}, blockPosition{pos.x, pos.y, 0}
+		}
 	}
 	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}].airBlocksData[blockPosition{pos.x, pos.y, 15}]; exists {
-
-		return true, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}, blockPosition{pos.x, pos.y, 15}
+		if pos.z == 0 {
+			return true, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}, blockPosition{pos.x, pos.y, 15}
+		}
 	}
 	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}].airBlocksData[blockPosition{pos.x, 0, pos.z}]; exists {
-
-		return true, chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}, blockPosition{pos.x, 0, pos.z}
+		if pos.y == 15 {
+			return true, chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}, blockPosition{pos.x, 0, pos.z}
+		}
 	}
 	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}].airBlocksData[blockPosition{pos.x, 15, pos.z}]; exists {
-
-		return true, chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}, blockPosition{pos.x, 15, pos.z}
+		if pos.y == 0 {
+			return true, chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}, blockPosition{pos.x, 15, pos.z}
+		}
 	}
 	return false, chunkPosition{}, blockPosition{}
 
@@ -167,7 +173,7 @@ func chunk(pos chunkPosition) chunkData {
 						if isCave > 0.1 {
 							delete(blocksData, blockPosition{x, y, z})
 							airBlocksData[blockPosition{x, y, z}] = airData{
-								lightLevel: 3,
+								lightLevel: 0,
 							}
 
 						}
