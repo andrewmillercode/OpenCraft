@@ -2,7 +2,6 @@ package main
 
 import (
 	"MinecraftGolang/config"
-	"fmt"
 	"image"
 	"image/draw"
 	"image/png"
@@ -14,23 +13,19 @@ import (
 
 var chunks map[chunkPosition]chunkData = make(map[chunkPosition]chunkData)
 
-type lightingChunkData struct {
-	chunkSections []chunkPosition
-	topMostBlocks []Vec3Int
-}
-
-var lightingChunks map[chunkPositionLighting]lightingChunkData = make(map[chunkPositionLighting]lightingChunkData)
+var lightingChunks map[chunkPositionLighting][]chunkPosition = make(map[chunkPositionLighting][]chunkPosition)
 
 func createChunks() {
 	for x := int32(0); x < config.NumOfChunks; x++ {
 		for z := int32(0); z < config.NumOfChunks; z++ {
 			horizPos := chunkPositionLighting{x, z}
 			for y := int32(16); y > -16; y-- {
-				//chunks.Store(chunkPosition{x, y, z}, chunk(chunkPosition{x, y, z}))
+
+				//store block data
 				chunks[chunkPosition{x, y, z}] = chunk(chunkPosition{x, y, z})
-				lightingChunks[horizPos] = lightingChunkData{
-					chunkSections: append(lightingChunks[horizPos].chunkSections, chunkPosition{x, y, z}),
-				}
+
+				//store lighting chunk
+				lightingChunks[horizPos] = append(lightingChunks[horizPos], chunkPosition{x, y, z})
 
 			}
 		}
@@ -109,10 +104,9 @@ type chunkBlockPositions struct {
 
 func propagateSunLight(chunkCoordLighting chunkPositionLighting) {
 	var blocks []chunkBlockPositions
-	var topMostBlocks []Vec3Int
 	for x := uint8(0); x < 16; x++ {
 		for z := uint8(0); z < 16; z++ {
-			highestPoint := int32(999)
+			hitBlock := false
 			i := 0
 			y := 15
 			for globalY := int32(256); globalY > -240; globalY-- {
@@ -123,34 +117,26 @@ func propagateSunLight(chunkCoordLighting chunkPositionLighting) {
 					y = 15
 				}
 
-				chunkPos := lightingChunks[chunkCoordLighting].chunkSections[i]
+				chunkPos := lightingChunks[chunkCoordLighting][i]
 
 				blockPos := blockPosition{x, uint8(y), z}
 
 				if _, exists := chunks[chunkPos].airBlocksData[blockPos]; exists {
-					if highestPoint != 999 {
-						chunks[chunkPos].airBlocksData[blockPos] = airData{lightLevel: 3}
-
-					} else {
-						blocks = append(blocks, chunkBlockPositions{chunkPos, blockPos})
-						chunks[chunkPos].airBlocksData[blockPos] = airData{lightLevel: 15}
+					if hitBlock {
+						chunks[chunkPos].airBlocksData[blockPos] = airData{lightLevel: 0}
 						continue
 					}
-				}
-				if highestPoint == 999 {
-					highestPoint = globalY + 1
-					topMostBlocks = append(topMostBlocks, Vec3Int{int(x), int(highestPoint), int(z)})
+					blocks = append(blocks, chunkBlockPositions{chunkPos, blockPos})
+					chunks[chunkPos].airBlocksData[blockPos] = airData{lightLevel: 15}
+					continue
 
 				}
+				hitBlock = true
 			}
 		}
 	}
-	lightingChunks[chunkCoordLighting] = lightingChunkData{
 
-		chunkSections: lightingChunks[chunkCoordLighting].chunkSections,
-		topMostBlocks: topMostBlocks,
-	}
-	// Initialize light propagation
+	// DFS light propagation
 
 	head := 0
 	for head < len(blocks) {
@@ -160,10 +146,21 @@ func propagateSunLight(chunkCoordLighting chunkPositionLighting) {
 		currentChunk := chunks[cur.chunkPos]
 		lightLevel := currentChunk.airBlocksData[cur.blockPos].lightLevel
 
-		if lightLevel <= 3 {
+		if lightLevel <= 0 {
 			continue
 		}
+		if cur.blockPos.x == 0 || cur.blockPos.x == 15 || cur.blockPos.z == 0 || cur.blockPos.z == 15 || cur.blockPos.y == 0 || cur.blockPos.y == 15 {
+			isBordering, borderingChunk, borderingBlock := ReturnBorderingAirBlock(cur.blockPos, cur.chunkPos)
+			if isBordering {
+				if borderingChunkData, exists := chunks[borderingChunk]; exists {
+					if borderingChunkData.airBlocksData[borderingBlock].lightLevel < lightLevel {
+						blocks = append(blocks, chunkBlockPositions{borderingChunk, borderingBlock})
+						borderingChunkData.airBlocksData[borderingBlock] = airData{lightLevel: lightLevel - 1}
+					}
+				}
+			}
 
+		}
 		for _, dir := range directions {
 			neighborPos := blockPosition{
 				x: uint8(int(cur.blockPos.x) + dir.x),
@@ -172,26 +169,15 @@ func propagateSunLight(chunkCoordLighting chunkPositionLighting) {
 			}
 
 			// Handle cross-chunk propagation (borders)
-			if int(cur.blockPos.x)+(dir.x) < 0 || int(cur.blockPos.x)+(dir.x) > 15 || int(cur.blockPos.z)+(dir.z) < 0 || int(cur.blockPos.z)+(dir.z) > 15 || int(cur.blockPos.y)+(dir.y) < 0 || int(cur.blockPos.y)+(dir.y) > 15 {
-				isBordering, borderingChunk, borderingBlock := ReturnBorderingAirBlock(cur.blockPos, cur.chunkPos)
-				if isBordering {
-					if borderingChunkData, exists := chunks[borderingChunk]; exists {
-						if borderingChunkData.airBlocksData[borderingBlock].lightLevel < lightLevel {
-							blocks = append(blocks, chunkBlockPositions{borderingChunk, borderingBlock})
-							borderingChunkData.airBlocksData[borderingBlock] = airData{lightLevel: uint8(float32(lightLevel) * 0.8)}
-						}
-					}
-				}
-				continue
-			}
-
-			// Handle same-chunk propagation
 			if neighborData, exists := currentChunk.airBlocksData[neighborPos]; exists {
 				if neighborData.lightLevel < lightLevel {
 					blocks = append(blocks, chunkBlockPositions{cur.chunkPos, neighborPos})
-					currentChunk.airBlocksData[neighborPos] = airData{lightLevel: uint8(float32(lightLevel) * 0.8)}
+					currentChunk.airBlocksData[neighborPos] = airData{lightLevel: lightLevel - 1}
 				}
 			}
+
+			// Handle same-chunk propagation
+
 		}
 	}
 
@@ -199,8 +185,8 @@ func propagateSunLight(chunkCoordLighting chunkPositionLighting) {
 
 func shadowsOnPlacedBlocks(chunkCoordLighting chunkPositionLighting, chunkPos chunkPosition, blockPosPlaced blockPosition) {
 	i := 0
-	for a := range lightingChunks[chunkCoordLighting].chunkSections {
-		if lightingChunks[chunkCoordLighting].chunkSections[a] == chunkPos {
+	for a := range lightingChunks[chunkCoordLighting] {
+		if lightingChunks[chunkCoordLighting][a] == chunkPos {
 			i = a
 		}
 	}
@@ -212,7 +198,7 @@ func shadowsOnPlacedBlocks(chunkCoordLighting chunkPositionLighting, chunkPos ch
 			i++
 			y = 15
 		}
-		chunkPos := lightingChunks[chunkCoordLighting].chunkSections[i]
+		chunkPos := lightingChunks[chunkCoordLighting][i]
 		blockPos := blockPosition{blockPosPlaced.x, uint8(y), blockPosPlaced.z}
 		if _, exists := chunks[chunkPos].airBlocksData[blockPos]; exists {
 
@@ -226,44 +212,6 @@ func shadowsOnPlacedBlocks(chunkCoordLighting chunkPositionLighting, chunkPos ch
 
 func quickLightingPropagation(chunkCoordLighting chunkPositionLighting, chunkPosStart chunkPosition, changedBlockPos blockPosition) {
 	//var blocks []chunkBlockPositions
-
-	for _, data := range lightingChunks[chunkCoordLighting].topMostBlocks {
-		if data.x == int(changedBlockPos.x) && data.z == int(changedBlockPos.z) {
-			fmt.Print(data)
-		}
-		y := data.y % 16
-
-		i := 0
-
-		i = 15 - int(data.y/16)
-		fmt.Print(i)
-
-		hitFloor := false
-		for globalY := int32(data.y); globalY > -240; globalY-- {
-
-			y--
-			if globalY%16 == 0 {
-				i++
-				y = 15
-			}
-
-			chunkPos := lightingChunks[chunkCoordLighting].chunkSections[i]
-
-			blockPos := blockPosition{uint8(data.x), uint8(y), uint8(data.z)}
-
-			if _, exists := chunks[chunkPos].airBlocksData[blockPos]; exists {
-				if hitFloor {
-					chunks[chunkPos].airBlocksData[blockPos] = airData{lightLevel: 3}
-
-				} else {
-
-					chunks[chunkPos].airBlocksData[blockPos] = airData{lightLevel: 15}
-					continue
-				}
-			}
-			hitFloor = true
-		}
-	}
 
 }
 
