@@ -11,7 +11,7 @@ var playerWidth float32 = 0.9
 func Collider(time float32, normal []int) collider {
 	return collider{Time: time, Normal: normal}
 }
-func collisions(chunks map[chunkPosition]chunkData) {
+func collisions() {
 	isOnGround = false
 
 	playerBox := AABB(
@@ -25,9 +25,10 @@ func collisions(chunks map[chunkPosition]chunkData) {
 		for z := -1; z <= 1; z++ {
 			for y := -3; y <= 3; y++ {
 				currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/16))) + int32(x), int32(math.Floor(float64(cameraPosition[1]/16))) + int32(y), int32(math.Floor(float64(cameraPosition[2]/16))) + int32(z)}
-				if _, exists := chunks[currentPlayerChunkPos]; exists {
 
-					chunk := chunks[currentPlayerChunkPos]
+				chunk, chunkPtr := chunks.Load(currentPlayerChunkPos)
+
+				if chunkPtr {
 					for i := 0; i < 3; i++ {
 						var colliders []collider
 						for blockX := pIntX - 3; blockX < pIntX+3; blockX++ {
@@ -36,7 +37,7 @@ func collisions(chunks map[chunkPosition]chunkData) {
 
 									relativeBlockPosition := blockPosition{uint8(blockX - (currentPlayerChunkPos.x * 16)), uint8(blockY - int32(currentPlayerChunkPos.y*16)), uint8(blockZ - (currentPlayerChunkPos.z * 16))}
 
-									if _, exists := chunk.blocksData[relativeBlockPosition]; exists {
+									if _, exists := chunk.(chunkData).blocksData[relativeBlockPosition]; exists {
 
 										floatBlockPos := mgl32.Vec3{float32(relativeBlockPosition.x), float32(relativeBlockPosition.y), float32(relativeBlockPosition.z)}
 										absoluteBlockPosition := mgl32.Vec3{float32(currentPlayerChunkPos.x*16) + floatBlockPos.X(), float32(currentPlayerChunkPos.y*16) + floatBlockPos.Y(), float32(currentPlayerChunkPos.z*16) + floatBlockPos.Z()}
@@ -142,151 +143,126 @@ func IsCollidingWithPlacedBlock(absBlockPos mgl32.Vec3) bool {
 
 // true = delete, false = create
 func raycast(action bool) {
-
-	var tMaxX, tMaxY, tMaxZ, tDeltaX, tDeltaY, tDeltaZ float32
-	var startPoint mgl32.Vec3 = cameraPosition.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Sub(cameraFront.Mul(0.1))
-	var endPoint mgl32.Vec3 = startPoint.Add(cameraFront.Mul(5))
-	var hitPoint mgl32.Vec3 = startPoint
-	var dx float32 = sign(endPoint.X() - startPoint.X())
-	if dx != 0 {
-		tDeltaX = float32(math.Min(float64((dx / (endPoint.X() - startPoint.X()))), 10000000))
-	} else {
-		tDeltaX = 10000000
-	}
-	if dx > 0 {
-		tMaxX = tDeltaX * frac1(startPoint.X())
-	} else {
-		tMaxX = tDeltaX * frac0(startPoint.X())
-	}
-
-	var dy float32 = sign(endPoint.Y() - startPoint.Y())
-	if dy != 0 {
-		tDeltaY = float32(math.Min(float64((dy / (endPoint.Y() - startPoint.Y()))), 10000000))
-	} else {
-		tDeltaY = 10000000
-	}
-	if dy > 0 {
-		tMaxY = tDeltaY * frac1(startPoint.Y())
-	} else {
-		tMaxY = tDeltaY * frac0(startPoint.Y())
-	}
-
-	var dz float32 = sign(endPoint.Z() - startPoint.Z())
-	if dz != 0 {
-		tDeltaZ = float32(math.Min(float64((dz / (endPoint.Z() - startPoint.Z()))), 10000000))
-	} else {
-		tDeltaZ = 10000000
-	}
-	if dz > 0 {
-		tMaxZ = tDeltaZ * frac1(startPoint.Z())
-	} else {
-		tMaxZ = tDeltaZ * frac0(startPoint.Z())
-	}
-	for !(tMaxX > 1 && tMaxY > 1 && tMaxZ > 1) {
-
-		ChunkPos := chunkPosition{
-			int32(math.Floor(float64(hitPoint[0] / 16))),
-			int32(math.Floor(float64(hitPoint[1] / 16))),
-			int32(math.Floor(float64(hitPoint[2] / 16))),
-		}
-
-		pos := blockPosition{
-			uint8(math.Floor(float64(hitPoint[0]) - float64(ChunkPos.x*16))),
-			uint8(math.Floor(float64(hitPoint[1]) - float64(ChunkPos.y*16))),
-			uint8(math.Floor(float64(hitPoint[2]) - float64(ChunkPos.z*16))),
-		}
-		absPos := mgl32.Vec3{
-			float32(math.Floor(float64(hitPoint[0]))),
-			float32(math.Floor(float64(hitPoint[1]))),
-			float32(math.Floor(float64(hitPoint[2]))),
-		}
-		if action {
-
-			if _, exists := chunks[ChunkPos].blocksData[pos]; exists {
-				chunks[ChunkPos].airBlocksData[pos] = airData{
-					lightLevel: 3,
-				}
-				delete(chunks[ChunkPos].blocksData, pos)
-
-				_, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
-				borderingChunks = append(borderingChunks, ChunkPos)
-
-				quickLightingPropagation(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
-
-				for _, chunkPos := range borderingChunks {
-
-					hasBlocks, vao, trisCount := createChunkVAO(chunks[chunkPos].blocksData, chunkPos)
-					chunks[chunkPos] = chunkData{
-						blocksData:    chunks[chunkPos].blocksData,
-						vao:           vao,
-						hasBlocks:     hasBlocks,
-						trisCount:     trisCount,
-						airBlocksData: chunks[chunkPos].airBlocksData,
-					}
-				}
-				return
-			}
-		}
-		if tMaxX < tMaxY {
-			if tMaxX < tMaxZ {
-				hitPoint[0] += dx
-				tMaxX += tDeltaX
-			} else {
-				hitPoint[2] += dz
-				tMaxZ += tDeltaZ
-			}
+	/*
+		var tMaxX, tMaxY, tMaxZ, tDeltaX, tDeltaY, tDeltaZ float32
+		var startPoint mgl32.Vec3 = cameraPosition.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Sub(cameraFront.Mul(0.1))
+		var endPoint mgl32.Vec3 = startPoint.Add(cameraFront.Mul(5))
+		var hitPoint mgl32.Vec3 = startPoint
+		var dx float32 = sign(endPoint.X() - startPoint.X())
+		if dx != 0 {
+			tDeltaX = float32(math.Min(float64((dx / (endPoint.X() - startPoint.X()))), 10000000))
 		} else {
-			if tMaxY < tMaxZ {
-				hitPoint[1] += dy
-				tMaxY += tDeltaY
-			} else {
-				hitPoint[2] += dz
-				tMaxZ += tDeltaZ
-			}
+			tDeltaX = 10000000
 		}
-		if !action {
+		if dx > 0 {
+			tMaxX = tDeltaX * frac1(startPoint.X())
+		} else {
+			tMaxX = tDeltaX * frac0(startPoint.X())
+		}
 
-			tempChunkPos := chunkPosition{
+		var dy float32 = sign(endPoint.Y() - startPoint.Y())
+		if dy != 0 {
+			tDeltaY = float32(math.Min(float64((dy / (endPoint.Y() - startPoint.Y()))), 10000000))
+		} else {
+			tDeltaY = 10000000
+		}
+		if dy > 0 {
+			tMaxY = tDeltaY * frac1(startPoint.Y())
+		} else {
+			tMaxY = tDeltaY * frac0(startPoint.Y())
+		}
+
+		var dz float32 = sign(endPoint.Z() - startPoint.Z())
+		if dz != 0 {
+			tDeltaZ = float32(math.Min(float64((dz / (endPoint.Z() - startPoint.Z()))), 10000000))
+		} else {
+			tDeltaZ = 10000000
+		}
+		if dz > 0 {
+			tMaxZ = tDeltaZ * frac1(startPoint.Z())
+		} else {
+			tMaxZ = tDeltaZ * frac0(startPoint.Z())
+		}
+		for !(tMaxX > 1 && tMaxY > 1 && tMaxZ > 1) {
+
+			ChunkPos := chunkPosition{
 				int32(math.Floor(float64(hitPoint[0] / 16))),
 				int32(math.Floor(float64(hitPoint[1] / 16))),
 				int32(math.Floor(float64(hitPoint[2] / 16))),
 			}
-			tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*16))), uint8(math.Floor(float64(hitPoint[1]) - float64(tempChunkPos.y*16))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*16)))}
 
-			if _, exists := chunks[tempChunkPos].blocksData[tempPos]; exists {
+			pos := blockPosition{
+				uint8(math.Floor(float64(hitPoint[0]) - float64(ChunkPos.x*16))),
+				uint8(math.Floor(float64(hitPoint[1]) - float64(ChunkPos.y*16))),
+				uint8(math.Floor(float64(hitPoint[2]) - float64(ChunkPos.z*16))),
+			}
+			absPos := mgl32.Vec3{
+				float32(math.Floor(float64(hitPoint[0]))),
+				float32(math.Floor(float64(hitPoint[1]))),
+				float32(math.Floor(float64(hitPoint[2]))),
+			}
+			if action {
 
-				isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
-
-				if _, exists := chunks[ChunkPos].blocksData[pos]; !exists && !isCollidingWithPlayer {
-
-					chunks[ChunkPos].blocksData[pos] = blockData{
-						blockType: 0,
+				if _, exists := chunks[ChunkPos].blocksData[pos]; exists {
+					delete(chunks[ChunkPos].blocksData, pos)
+					chunks[ChunkPos].airBlocksData[pos] = airData{
+						lightLevel: 0,
 					}
-					delete(chunks[ChunkPos].airBlocksData, pos)
 
-					_, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
-					borderingChunks = append(borderingChunks, ChunkPos)
-					shadowsOnPlacedBlocks(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
-
-					for _, chunkPos := range borderingChunks {
-						hasBlocks, vao, trisCount := createChunkVAO(chunks[chunkPos].blocksData, chunkPos)
-						chunks[chunkPos] = chunkData{
-							blocksData:    chunks[chunkPos].blocksData,
-							vao:           vao,
-							hasBlocks:     hasBlocks,
-							trisCount:     trisCount,
-							airBlocksData: chunks[chunkPos].airBlocksData,
-						}
-					}
+					blockStateUpdateLightingRecalc(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
 
 					return
 				}
 			}
+			if tMaxX < tMaxY {
+				if tMaxX < tMaxZ {
+					hitPoint[0] += dx
+					tMaxX += tDeltaX
+				} else {
+					hitPoint[2] += dz
+					tMaxZ += tDeltaZ
+				}
+			} else {
+				if tMaxY < tMaxZ {
+					hitPoint[1] += dy
+					tMaxY += tDeltaY
+				} else {
+					hitPoint[2] += dz
+					tMaxZ += tDeltaZ
+				}
+			}
+			if !action {
+
+				tempChunkPos := chunkPosition{
+					int32(math.Floor(float64(hitPoint[0] / 16))),
+					int32(math.Floor(float64(hitPoint[1] / 16))),
+					int32(math.Floor(float64(hitPoint[2] / 16))),
+				}
+				tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*16))), uint8(math.Floor(float64(hitPoint[1]) - float64(tempChunkPos.y*16))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*16)))}
+
+				if _, exists := chunks[tempChunkPos].blocksData[tempPos]; exists {
+
+					isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
+
+					if _, exists := chunks[ChunkPos].blocksData[pos]; !exists && !isCollidingWithPlayer {
+
+						chunks[ChunkPos].blocksData[pos] = blockData{
+							blockType: 0,
+						}
+						delete(chunks[ChunkPos].airBlocksData, pos)
+
+						_, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
+						borderingChunks = append(borderingChunks, ChunkPos)
+						shadowsOnPlacedBlocks(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
+
+						return
+					}
+				}
+
+			}
 
 		}
-
-	}
-
+	*/
 }
 
 func collide(box1, box2 aabb) (float32, []int) {

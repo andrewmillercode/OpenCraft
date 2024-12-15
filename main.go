@@ -221,7 +221,8 @@ func main() {
 
 	initialized := false
 	for !window.ShouldClose() {
-		gl.ClearColor(0.2, 0.3, 0.3, 1.0)
+		//sky color
+		gl.ClearColor(0.51, 0.72, 0.87, 1.0)
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		deltaTime = float32(time.Since(previousFrame).Seconds())
 		previousFrame = time.Now()
@@ -250,7 +251,7 @@ func main() {
 			}
 			if !isFlying {
 				velocity[1] -= 0.02 //gravity
-				collisions(chunks)
+				collisions()
 			}
 			if jumpCooldown > 0.01 {
 				jumpCooldown -= 0.01
@@ -280,18 +281,29 @@ func main() {
 		viewLoc = gl.GetUniformLocation(opengl3d, gl.Str("view\x00"))
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
 
-		for chunkPos, chunkData := range chunks {
+		chunks.Range(func(key, value interface{}) bool {
 
-			if chunkData.hasBlocks {
+			chunkPos, keyExists := key.(chunkPosition)   //chunkPosition
+			_chunkData, valueExists := value.(chunkData) //*chunkData
 
-				model := mgl32.Translate3D(float32(chunkPos.x*16), float32(chunkPos.y*16), float32(chunkPos.z*16))
-				modelLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
-				gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
+			if keyExists && valueExists {
+				if _chunkData.hasBlocks {
 
-				gl.BindVertexArray(chunkData.vao)
-				gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
+					model := mgl32.Translate3D(float32(chunkPos.x*16), float32(chunkPos.y*16), float32(chunkPos.z*16))
+					modelLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
+					gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
+
+					gl.BindVertexArray(_chunkData.vao)
+					gl.DrawArrays(gl.TRIANGLES, 0, _chunkData.trisCount)
+				}
+			} else {
+				fmt.Println("Chunk key or value was not found in render main (line 295).")
 			}
-		}
+
+			// Return true to continue iteration
+			return true
+		})
+
 		if showDebug {
 			//UI RENDERING STAGE
 			gl.Disable(gl.DEPTH_TEST)

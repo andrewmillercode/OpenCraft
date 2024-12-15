@@ -9,7 +9,7 @@ import (
 
 var inputDelayAccumulator float32
 
-var inputUpdateRate float32 = float32(1.0 / 10.0)
+var inputUpdateRate float32 = float32(1.0 / 8.0)
 
 func input(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 
