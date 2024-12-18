@@ -203,35 +203,35 @@ func raycast(action bool) {
 			}
 			if action {
 
-				if _, exists := chunks[ChunkPos].blocksData[pos]; exists {
-					delete(chunks[ChunkPos].blocksData, pos)
-					chunks[ChunkPos].airBlocksData[pos] = airData{
-						lightLevel: 0,
-					}
-
-					blockStateUpdateLightingRecalc(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
-
-					return
+			if _, exists := chunks[ChunkPos].blocksData[pos]; exists {
+				chunks[ChunkPos].airBlocksData[pos] = airData{
+					lightLevel: 3,
 				}
+				delete(chunks[ChunkPos].blocksData, pos)
+
+				quickLightingPropagation(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
+
+				return
 			}
-			if tMaxX < tMaxY {
-				if tMaxX < tMaxZ {
-					hitPoint[0] += dx
-					tMaxX += tDeltaX
-				} else {
-					hitPoint[2] += dz
-					tMaxZ += tDeltaZ
-				}
+		}
+		if tMaxX < tMaxY {
+			if tMaxX < tMaxZ {
+				hitPoint[0] += dx
+				tMaxX += tDeltaX
 			} else {
-				if tMaxY < tMaxZ {
-					hitPoint[1] += dy
-					tMaxY += tDeltaY
-				} else {
-					hitPoint[2] += dz
-					tMaxZ += tDeltaZ
-				}
+				hitPoint[2] += dz
+				tMaxZ += tDeltaZ
 			}
-			if !action {
+		} else {
+			if tMaxY < tMaxZ {
+				hitPoint[1] += dy
+				tMaxY += tDeltaY
+			} else {
+				hitPoint[2] += dz
+				tMaxZ += tDeltaZ
+			}
+		}
+		if !action {
 
 				tempChunkPos := chunkPosition{
 					int32(math.Floor(float64(hitPoint[0] / 16))),
@@ -251,9 +251,9 @@ func raycast(action bool) {
 						}
 						delete(chunks[ChunkPos].airBlocksData, pos)
 
-						_, borderingChunks := ReturnBorderingChunks(pos, ChunkPos)
-						borderingChunks = append(borderingChunks, ChunkPos)
-						shadowsOnPlacedBlocks(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
+					cLighting := chunkPositionLighting{ChunkPos.x, ChunkPos.z}
+					shadowsOnPlacedBlocks(cLighting, ChunkPos, pos)
+					quickLightingPropagation(cLighting, ChunkPos, pos)
 
 						return
 					}

@@ -221,8 +221,7 @@ func main() {
 
 	initialized := false
 	for !window.ShouldClose() {
-		//sky color
-		gl.ClearColor(0.51, 0.72, 0.87, 1.0)
+		gl.ClearColor(0, 0, 0, 0)
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		deltaTime = float32(time.Since(previousFrame).Seconds())
 		previousFrame = time.Now()
@@ -340,12 +339,5 @@ func main() {
 
 /*
 To-do:
-
-Fix lighting
 Add light rebuild on block edits
-Improve block break performance, chunk reload drops frames a ton
-
-
-MC lighting system:
-light level at 15 on blocks topmost vertically. for each block that is adjacent to another block (vertically) decrease by 1 -- when air gap, no decrease.
 */
