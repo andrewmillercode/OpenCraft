@@ -11,6 +11,9 @@ var playerWidth float32 = 0.9
 func Collider(time float32, normal []int) collider {
 	return collider{Time: time, Normal: normal}
 }
+
+var prevPlayerChunkPos chunkPosition
+
 func collisions(chunks map[chunkPosition]chunkData) {
 	isOnGround = false
 
@@ -25,6 +28,11 @@ func collisions(chunks map[chunkPosition]chunkData) {
 		for z := -1; z <= 1; z++ {
 			for y := -3; y <= 3; y++ {
 				currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/16))) + int32(x), int32(math.Floor(float64(cameraPosition[1]/16))) + int32(y), int32(math.Floor(float64(cameraPosition[2]/16))) + int32(z)}
+				if currentPlayerChunkPos.x != prevPlayerChunkPos.x || currentPlayerChunkPos.z != prevPlayerChunkPos.z {
+					infiniteChunkGeneration(currentPlayerChunkPos)
+				}
+				prevPlayerChunkPos = currentPlayerChunkPos
+
 				if _, exists := chunks[currentPlayerChunkPos]; exists {
 
 					chunk := chunks[currentPlayerChunkPos]
@@ -203,12 +211,10 @@ func raycast(action bool) {
 		if action {
 
 			if _, exists := chunks[ChunkPos].blocksData[pos]; exists {
-				chunks[ChunkPos].airBlocksData[pos] = airData{
-					lightLevel: 3,
-				}
+				chunks[ChunkPos].airBlocksData[pos] = &airData{lightLevel: 0}
 				delete(chunks[ChunkPos].blocksData, pos)
 
-				quickLightingPropagation(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
+				lightPropBreakBlock(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
 
 				return
 			}
@@ -250,9 +256,7 @@ func raycast(action bool) {
 					}
 					delete(chunks[ChunkPos].airBlocksData, pos)
 
-					cLighting := chunkPositionLighting{ChunkPos.x, ChunkPos.z}
-					shadowsOnPlacedBlocks(cLighting, ChunkPos, pos)
-					quickLightingPropagation(cLighting, ChunkPos, pos)
+					lightPropPlaceBlock(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
 
 					return
 				}

@@ -180,6 +180,7 @@ func main() {
 	opengl3d := initOpenGL3D()
 
 	gl.Enable(gl.BLEND)
+	gl.BlendEquation(gl.FUNC_ADD)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	gl.UseProgram(opengl3d)
 
@@ -221,8 +222,13 @@ func main() {
 
 	initialized := false
 	for !window.ShouldClose() {
-		gl.ClearColor(0, 0, 0, 0)
+		//gl.ColorMask(false, false, false, true)
+		//gl.ClearColor(1, 0, 1, 0)
+
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+		gl.ClearColor(0.47, 0.65, 1.0, 1.0)
+		//gl.ColorMask(true, true, true, true)
+
 		deltaTime = float32(time.Since(previousFrame).Seconds())
 		previousFrame = time.Now()
 		inputDelayAccumulator += deltaTime
@@ -282,15 +288,14 @@ func main() {
 
 		for chunkPos, chunkData := range chunks {
 
-			if chunkData.hasBlocks {
+			model := mgl32.Translate3D(float32(chunkPos.x*16), float32(chunkPos.y*16), float32(chunkPos.z*16))
+			modelLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
+			gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 
-				model := mgl32.Translate3D(float32(chunkPos.x*16), float32(chunkPos.y*16), float32(chunkPos.z*16))
-				modelLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
-				gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
+			gl.BindVertexArray(chunkData.vao)
+			//wireframe: gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
+			gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
 
-				gl.BindVertexArray(chunkData.vao)
-				gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
-			}
 		}
 		if showDebug {
 			//UI RENDERING STAGE

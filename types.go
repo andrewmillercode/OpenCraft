@@ -38,10 +38,9 @@ type airData struct {
 	lightLevel uint8
 }
 type chunkData struct {
-	airBlocksData map[blockPosition]airData
+	airBlocksData map[blockPosition]*airData
 	blocksData    map[blockPosition]blockData
 	vao           uint32
-	hasBlocks     bool
 	trisCount     int32
 }
 
@@ -88,74 +87,99 @@ func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []c
 }
 
 func ReturnBorderingAirBlock(pos blockPosition, chunkPos chunkPosition) (bool, chunkPosition, blockPosition) {
+	if pos.x == 15 {
+		if _, exists := chunks[chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}].airBlocksData[blockPosition{0, pos.y, pos.z}]; exists {
 
-	if _, exists := chunks[chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}].airBlocksData[blockPosition{0, pos.y, pos.z}]; exists {
-		if pos.x == 15 {
 			return true, chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}, blockPosition{0, pos.y, pos.z}
+
 		}
 	}
-	if _, exists := chunks[chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}].airBlocksData[blockPosition{15, pos.y, pos.z}]; exists {
-		if pos.x == 0 {
+	if pos.x == 0 {
+		if _, exists := chunks[chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}].airBlocksData[blockPosition{15, pos.y, pos.z}]; exists {
+
 			return true, chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}, blockPosition{15, pos.y, pos.z}
+
 		}
 	}
-	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}].airBlocksData[blockPosition{pos.x, pos.y, 0}]; exists {
-		if pos.z == 15 {
+	if pos.z == 15 {
+		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}].airBlocksData[blockPosition{pos.x, pos.y, 0}]; exists {
+
 			return true, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}, blockPosition{pos.x, pos.y, 0}
+
 		}
 	}
-	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}].airBlocksData[blockPosition{pos.x, pos.y, 15}]; exists {
-		if pos.z == 0 {
+	if pos.z == 0 {
+		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}].airBlocksData[blockPosition{pos.x, pos.y, 15}]; exists {
+
 			return true, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}, blockPosition{pos.x, pos.y, 15}
+
 		}
 	}
-	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}].airBlocksData[blockPosition{pos.x, 0, pos.z}]; exists {
-		if pos.y == 15 {
+	if pos.y == 15 {
+		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}].airBlocksData[blockPosition{pos.x, 0, pos.z}]; exists {
+
 			return true, chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}, blockPosition{pos.x, 0, pos.z}
+
 		}
 	}
-	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}].airBlocksData[blockPosition{pos.x, 15, pos.z}]; exists {
-		if pos.y == 0 {
+	if pos.y == 0 {
+		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}].airBlocksData[blockPosition{pos.x, 15, pos.z}]; exists {
+
 			return true, chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}, blockPosition{pos.x, 15, pos.z}
+
 		}
 	}
 	return false, chunkPosition{}, blockPosition{}
 
 }
+
+var scale float32 = 100
+var amplitude float32 = 30
+
 func chunk(pos chunkPosition) chunkData {
 	var blocksData map[blockPosition]blockData = make(map[blockPosition]blockData)
-	var airBlocksData map[blockPosition]airData = make(map[blockPosition]airData)
-
-	var scale float32 = 100 // Adjust as needed for terrain detail
-	var amplitude float32 = 30
+	var airBlocksData map[blockPosition]*airData = make(map[blockPosition]*airData)
 
 	for x := uint8(0); x < 16; x++ {
 
 		for z := uint8(0); z < 16; z++ {
 
-			noiseValue := fractalNoise(int32(x)+(pos.x*16), int32(z)+(pos.z*16), amplitude, 4, 1.5, 0.5, scale)
+			noiseValue := fractalNoise(int32(x)+(pos.x*16), int32(z)+(pos.z*16), amplitude, 2, 1.5, 0.5, scale)
 
 			for y := uint8(0); y < 16; y++ {
 
 				worldY := int16(y) + int16(pos.y*16)
 
 				if worldY > noiseValue {
-					airBlocksData[blockPosition{x, y, z}] = airData{
+					airBlocksData[blockPosition{x, y, z}] = &airData{
 						lightLevel: 15,
 					}
 				}
 				if worldY <= noiseValue {
 					//determine block type
 					blockType := DirtID
-					//fluctuation := int16(random.Float32() * 5)
 
-					fluctuation := int16(random.Float32() * 5)
+					if worldY < 0 {
+						isCave := fractalNoise3D(int32(x)+(pos.x*16), int32(y)+int32(pos.y*16), int32(z)+(pos.z*16), 2, 15)
 
-					if worldY < ((noiseValue - 6) + fluctuation) {
-						blockType = DirtID
-					}
-					if worldY < ((noiseValue - 10) + fluctuation) {
-						blockType = StoneID
+						if isCave > 0.1 {
+							airBlocksData[blockPosition{x, y, z}] = &airData{
+								lightLevel: 0,
+							}
+
+						} else {
+							//top most layer
+							if worldY == noiseValue {
+								blocksData[blockPosition{x, y, z}] = blockData{
+									blockType: GrassID,
+								}
+							} else {
+								blocksData[blockPosition{x, y, z}] = blockData{
+									blockType: blockType,
+								}
+							}
+						}
+						continue
 					}
 					//top most layer
 					if worldY == noiseValue {
@@ -165,17 +189,6 @@ func chunk(pos chunkPosition) chunkData {
 					} else {
 						blocksData[blockPosition{x, y, z}] = blockData{
 							blockType: blockType,
-						}
-					}
-					if worldY < 0 {
-						isCave := fractalNoise3D(int32(x)+(pos.x*16), int32(y)+int32(pos.y*16), int32(z)+(pos.z*16), 0.7, 8)
-
-						if isCave > 0.1 {
-							delete(blocksData, blockPosition{x, y, z})
-							airBlocksData[blockPosition{x, y, z}] = airData{
-								lightLevel: 0,
-							}
-
 						}
 					}
 				}
@@ -188,7 +201,6 @@ func chunk(pos chunkPosition) chunkData {
 	return chunkData{
 		blocksData:    blocksData,
 		airBlocksData: airBlocksData,
-		hasBlocks:     len(airBlocksData) >= 4096,
 		vao:           0,
 		trisCount:     0,
 	}
