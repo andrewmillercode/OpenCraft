@@ -256,7 +256,7 @@ func main() {
 			}
 			if !isFlying {
 				velocity[1] -= 0.02 //gravity
-				collisions(chunks)
+				collisions()
 			}
 			if jumpCooldown > 0.01 {
 				jumpCooldown -= 0.01
@@ -285,18 +285,22 @@ func main() {
 		view = initViewMatrix()
 		viewLoc = gl.GetUniformLocation(opengl3d, gl.Str("view\x00"))
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
+		chunks.Range(func(key, value interface{}) bool {
 
-		for chunkPos, chunkData := range chunks {
+			chunkPos := key.(chunkPosition)
+			chunkData := value.(chunkData)
+			if chunkData.trisCount > 0 {
+				model := mgl32.Translate3D(float32(chunkPos.x*16), float32(chunkPos.y*16), float32(chunkPos.z*16))
+				modelLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
+				gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 
-			model := mgl32.Translate3D(float32(chunkPos.x*16), float32(chunkPos.y*16), float32(chunkPos.z*16))
-			modelLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
-			gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
+				gl.BindVertexArray(chunkData.vao)
+				//wireframe: gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
+				gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
+			}
+			return true
+		})
 
-			gl.BindVertexArray(chunkData.vao)
-			//wireframe: gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
-			gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
-
-		}
 		if showDebug {
 			//UI RENDERING STAGE
 			gl.Disable(gl.DEPTH_TEST)

@@ -47,86 +47,85 @@ type chunkData struct {
 func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []chunkPosition) {
 
 	var borderingChunks []chunkPosition
+	/*
+		if _, exists := chunks[chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}]; exists {
 
-	if _, exists := chunks[chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}]; exists {
-
-		if pos.x == 15 {
-			borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z})
+			if pos.x == 15 {
+				borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z})
+			}
 		}
-	}
-	if _, exists := chunks[chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}]; exists {
-		if pos.x == 0 {
-			borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z})
+		if _, exists := chunks[chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}]; exists {
+			if pos.x == 0 {
+				borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z})
+			}
 		}
-	}
-	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}]; exists {
-		if pos.z == 15 {
-			borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1})
+		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}]; exists {
+			if pos.z == 15 {
+				borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1})
+			}
 		}
-	}
-	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}]; exists {
-		if pos.z == 0 {
-			borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1})
+		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}]; exists {
+			if pos.z == 0 {
+				borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1})
+			}
 		}
-	}
-	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}]; exists {
-		if pos.y == 15 {
-			borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z})
+		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}]; exists {
+			if pos.y == 15 {
+				borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z})
+			}
 		}
-	}
-	if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}]; exists {
-		if pos.y == 0 {
-			borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z})
+		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}]; exists {
+			if pos.y == 0 {
+				borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z})
+			}
 		}
-	}
-	if len(borderingChunks) > 0 {
-		return true, borderingChunks
-	}
+		if len(borderingChunks) > 0 {
+			return true, borderingChunks
+		}
+	*/
 	return false, borderingChunks
 
 }
 
 func ReturnBorderingAirBlock(pos blockPosition, chunkPos chunkPosition) (bool, chunkPosition, blockPosition) {
+	var adjChunk chunkPosition
+	var adjBlock blockPosition
+	var chunkSet bool = false
 	if pos.x == 15 {
-		if _, exists := chunks[chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}].airBlocksData[blockPosition{0, pos.y, pos.z}]; exists {
-
-			return true, chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}, blockPosition{0, pos.y, pos.z}
-
-		}
+		adjChunk = chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}
+		adjBlock = blockPosition{0, pos.y, pos.z}
+		chunkSet = true
 	}
 	if pos.x == 0 {
-		if _, exists := chunks[chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}].airBlocksData[blockPosition{15, pos.y, pos.z}]; exists {
-
-			return true, chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}, blockPosition{15, pos.y, pos.z}
-
-		}
+		adjChunk = chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}
+		adjBlock = blockPosition{15, pos.y, pos.z}
+		chunkSet = true
 	}
 	if pos.z == 15 {
-		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}].airBlocksData[blockPosition{pos.x, pos.y, 0}]; exists {
-
-			return true, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}, blockPosition{pos.x, pos.y, 0}
-
-		}
+		adjChunk = chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}
+		adjBlock = blockPosition{pos.x, pos.y, 0}
+		chunkSet = true
 	}
 	if pos.z == 0 {
-		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}].airBlocksData[blockPosition{pos.x, pos.y, 15}]; exists {
-
-			return true, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}, blockPosition{pos.x, pos.y, 15}
-
-		}
+		adjChunk = chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}
+		adjBlock = blockPosition{pos.x, pos.y, 15}
+		chunkSet = true
 	}
 	if pos.y == 15 {
-		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}].airBlocksData[blockPosition{pos.x, 0, pos.z}]; exists {
-
-			return true, chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}, blockPosition{pos.x, 0, pos.z}
-
-		}
+		adjChunk = chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}
+		adjBlock = blockPosition{pos.x, 0, pos.z}
+		chunkSet = true
 	}
 	if pos.y == 0 {
-		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}].airBlocksData[blockPosition{pos.x, 15, pos.z}]; exists {
-
-			return true, chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}, blockPosition{pos.x, 15, pos.z}
-
+		adjChunk = chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}
+		adjBlock = blockPosition{pos.x, 15, pos.z}
+		chunkSet = true
+	}
+	if chunkSet {
+		if val, ok := chunks.Load(adjChunk); ok {
+			if _, exists := val.(chunkData).airBlocksData[adjBlock]; exists {
+				return true, adjChunk, adjBlock
+			}
 		}
 	}
 	return false, chunkPosition{}, blockPosition{}

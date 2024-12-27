@@ -14,7 +14,7 @@ func Collider(time float32, normal []int) collider {
 
 var prevPlayerChunkPos chunkPosition
 
-func collisions(chunks map[chunkPosition]chunkData) {
+func collisions() {
 	isOnGround = false
 
 	playerBox := AABB(
@@ -33,9 +33,9 @@ func collisions(chunks map[chunkPosition]chunkData) {
 				}
 				prevPlayerChunkPos = currentPlayerChunkPos
 
-				if _, exists := chunks[currentPlayerChunkPos]; exists {
+				if val, ok := chunks.Load(currentPlayerChunkPos); ok {
 
-					chunk := chunks[currentPlayerChunkPos]
+					chunk := val.(chunkData)
 					for i := 0; i < 3; i++ {
 						var colliders []collider
 						for blockX := pIntX - 3; blockX < pIntX+3; blockX++ {
@@ -209,15 +209,17 @@ func raycast(action bool) {
 			float32(math.Floor(float64(hitPoint[2]))),
 		}
 		if action {
+			if val, ok := chunks.Load(ChunkPos); ok {
+				if _, exists := val.(chunkData).blocksData[pos]; exists {
+					val.(chunkData).airBlocksData[pos] = &airData{lightLevel: 0}
+					delete(val.(chunkData).blocksData, pos)
 
-			if _, exists := chunks[ChunkPos].blocksData[pos]; exists {
-				chunks[ChunkPos].airBlocksData[pos] = &airData{lightLevel: 0}
-				delete(chunks[ChunkPos].blocksData, pos)
+					lightPropBreakBlock(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
 
-				lightPropBreakBlock(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
-
-				return
+					return
+				}
 			}
+
 		}
 		if tMaxX < tMaxY {
 			if tMaxX < tMaxZ {
@@ -244,21 +246,23 @@ func raycast(action bool) {
 				int32(math.Floor(float64(hitPoint[2] / 16))),
 			}
 			tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*16))), uint8(math.Floor(float64(hitPoint[1]) - float64(tempChunkPos.y*16))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*16)))}
+			if val, ok := chunks.Load(tempChunkPos); ok {
+				if _, exists := val.(chunkData).blocksData[tempPos]; exists {
 
-			if _, exists := chunks[tempChunkPos].blocksData[tempPos]; exists {
+					isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
 
-				isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
+					if _, exists := val.(chunkData).blocksData[pos]; !exists && !isCollidingWithPlayer {
 
-				if _, exists := chunks[ChunkPos].blocksData[pos]; !exists && !isCollidingWithPlayer {
+						val.(chunkData).blocksData[pos] = blockData{
+							blockType: 0,
+						}
+						delete(val.(chunkData).airBlocksData, pos)
 
-					chunks[ChunkPos].blocksData[pos] = blockData{
-						blockType: 0,
+						lightPropPlaceBlock(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
+
+						return
 					}
-					delete(chunks[ChunkPos].airBlocksData, pos)
 
-					lightPropPlaceBlock(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
-
-					return
 				}
 			}
 
