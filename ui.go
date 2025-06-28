@@ -43,23 +43,7 @@ func loadFont(pathToFont string) (*freetype.Context, *image.RGBA) {
 
 func createText(ctx *freetype.Context, content interface{}, fontSize float64, isUpdated bool, position mgl32.Vec2, dst *image.RGBA, program uint32) text {
 
-	ctx.SetFontSize(fontSize)
-	//X,Y
-	pt := freetype.Pt(0, int(ctx.PointToFixed(48)>>6))
-
-	// Draw the string on the destination image
-	var err error
-
-	switch v := content.(type) {
-	case *string:
-		_, err = ctx.DrawString(*v, pt)
-	case string:
-		_, err = ctx.DrawString(v, pt)
-	}
-
-	if err != nil {
-		panic(err)
-	}
+	
 
 	vertices := []float32{
 		0.0, 1.0, 0.0, 0.0, 1.0, // Top-left
@@ -104,6 +88,21 @@ func clearImage(img *image.RGBA) {
 	}
 }
 func uploadTextTexture(img *image.RGBA) uint32 {
+	/*
+	var texture uint32
+	gl.GenTextures(1, &texture)
+	gl.BindTexture(gl.TEXTURE_2D, texture)
+	gl.TexImage2D(
+		gl.TEXTURE_2D, 0, gl.RGBA,
+		int32(img.Rect.Size().X), int32(img.Rect.Size().Y),
+		0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix),
+	)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+	return texture
+	*/
 	var texture uint32
 	gl.GenTextures(1, &texture)
 	gl.BindTexture(gl.TEXTURE_2D, texture)
