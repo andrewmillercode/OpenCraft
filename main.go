@@ -142,7 +142,6 @@ func updateFPS() {
 	if timeElapsed >= (100 * time.Millisecond) {
 		fps = float64(frameCount) / timeElapsed.Seconds()
 		fpsString = "FPS: " + strconv.FormatFloat(mgl64.Round(fps, 1), 'f', -1, 32)
-		//fmt.Printf("%.2f\n", fps)
 		frameCount = 0
 		startTime = currentTime
 	}
@@ -285,24 +284,23 @@ func main() {
 		view = initViewMatrix()
 		viewLoc = gl.GetUniformLocation(opengl3d, gl.Str("view\x00"))
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
-		chunks.Range(func(key, value interface{}) bool {
-
-			chunkPos := key.(chunkPosition)
-			chunkData := value.(chunkData)
+		
+		for chunkPos, chunkData := range chunks {
+			
 			if chunkData.trisCount > 0 {
-				model := mgl32.Translate3D(float32(chunkPos.x*16), float32(chunkPos.y*16), float32(chunkPos.z*16))
-				modelLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
-				gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
-
+				//render the chunk
+				modelPos := mgl32.Translate3D(float32(chunkPos.x*16), float32(chunkPos.y*16), float32(chunkPos.z*16))
+				modelMemLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
+				gl.UniformMatrix4fv(modelMemLoc, 1, false, &modelPos[0])
 				gl.BindVertexArray(chunkData.vao)
 				//wireframe: gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
 				gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
 			}
-			return true
-		})
+		}
 
 		if showDebug {
 			//UI RENDERING STAGE
+			
 			gl.Disable(gl.DEPTH_TEST)
 			gl.Disable(gl.CULL_FACE)
 
@@ -313,8 +311,8 @@ func main() {
 			gl.UniformMatrix4fv(projectionLoc2D, 1, false, &orthographicProjection[0])
 
 			for i, obj := range textObjects {
-				model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0).Mul4(mgl32.Scale3D(512, 512, 1))
-				//model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0)
+				model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0)
+				
 				modelLoc := gl.GetUniformLocation(opengl2d, gl.Str("model\x00"))
 				gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 				if obj.Update {

@@ -122,8 +122,8 @@ func ReturnBorderingAirBlock(pos blockPosition, chunkPos chunkPosition) (bool, c
 		chunkSet = true
 	}
 	if chunkSet {
-		if val, ok := chunks.Load(adjChunk); ok {
-			if _, exists := val.(chunkData).airBlocksData[adjBlock]; exists {
+		if chunk, ok := chunks[adjChunk]; ok {
+			if _, ok := chunk.airBlocksData[adjBlock]; ok {
 				return true, adjChunk, adjBlock
 			}
 		}

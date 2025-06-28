@@ -2,7 +2,7 @@ package main
 
 import (
 	"math"
-
+	"fmt"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl32"
 )
@@ -15,6 +15,7 @@ func input(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, 
 
 	if action == glfw.Press {
 		if key == glfw.KeyF3 {
+			fmt.Printf("Debug: %v\n", showDebug)
 			showDebug = !showDebug
 		}
 		if key == glfw.KeyF {
