@@ -26,6 +26,7 @@ var (
 	lastY                  float64
 	firstMouse             bool = true
 	movementSpeed          float32
+	shouldLockMouse 	  bool = true
 	cameraPosition         = mgl32.Vec3{0.0, 50, 15}
 	cameraPositionLerped   = cameraPosition
 	cameraFront            = mgl32.Vec3{0.0, 0.0, -1.0}
@@ -234,7 +235,11 @@ func main() {
 		tickAccumulator += deltaTime
 		glfw.PollEvents()
 		//hide mouse
-		window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
+		if shouldLockMouse {
+			window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
+		} else {
+			window.SetInputMode(glfw.CursorMode, glfw.CursorNormal)
+		}
 		//mouse look around
 		window.SetCursorPosCallback(mouseMoveCallback)
 		window.SetMouseButtonCallback(mouseInputCallback)
@@ -311,7 +316,7 @@ func main() {
 			gl.UniformMatrix4fv(projectionLoc2D, 1, false, &orthographicProjection[0])
 
 			for i, obj := range textObjects {
-				model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0)
+				model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0).Mul4(mgl32.Scale3D(512,512, 1.0))
 				
 				modelLoc := gl.GetUniformLocation(opengl2d, gl.Str("model\x00"))
 				gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])

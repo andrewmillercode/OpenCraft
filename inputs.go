@@ -21,6 +21,9 @@ func input(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, 
 		if key == glfw.KeyF {
 			isFlying = !isFlying
 		}
+		if key == glfw.KeyEscape {
+			shouldLockMouse = !shouldLockMouse
+		}
 		if key == glfw.KeyF11 {
 			if monitor == nil {
 				//set to fullscreen
@@ -90,6 +93,7 @@ func mouseMoveCallback(window *glfw.Window, xPos, yPos float64) {
 func mouseInputCallback(window *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 
 	if action == glfw.Press {
+		shouldLockMouse = true
 		if button == glfw.MouseButtonRight {
 			raycast(false)
 		}
