@@ -294,7 +294,7 @@ func main() {
 			
 			if chunkData.trisCount > 0 {
 				//render the chunk
-				modelPos := mgl32.Translate3D(float32(chunkPos.x*16), float32(chunkPos.y*16), float32(chunkPos.z*16))
+				modelPos := mgl32.Translate3D(float32(chunkPos.x*32), float32(chunkPos.y*32), float32(chunkPos.z*32))
 				modelMemLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
 				gl.UniformMatrix4fv(modelMemLoc, 1, false, &modelPos[0])
 				gl.BindVertexArray(chunkData.vao)

@@ -47,10 +47,10 @@ type chunkData struct {
 func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []chunkPosition) {
 
 	var borderingChunks []chunkPosition
-	/*
+	
 		if _, exists := chunks[chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}]; exists {
 
-			if pos.x == 15 {
+			if pos.x == 31 {
 				borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z})
 			}
 		}
@@ -60,7 +60,7 @@ func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []c
 			}
 		}
 		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}]; exists {
-			if pos.z == 15 {
+			if pos.z == 31 {
 				borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1})
 			}
 		}
@@ -70,7 +70,7 @@ func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []c
 			}
 		}
 		if _, exists := chunks[chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}]; exists {
-			if pos.y == 15 {
+			if pos.y == 31 {
 				borderingChunks = append(borderingChunks, chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z})
 			}
 		}
@@ -82,7 +82,7 @@ func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []c
 		if len(borderingChunks) > 0 {
 			return true, borderingChunks
 		}
-	*/
+	
 	return false, borderingChunks
 
 }
@@ -132,22 +132,22 @@ func ReturnBorderingAirBlock(pos blockPosition, chunkPos chunkPosition) (bool, c
 
 }
 
-var scale float32 = 100
-var amplitude float32 = 30
+var scale float32 = 30
+var amplitude float32 = 10
 
 func chunk(pos chunkPosition) chunkData {
 	var blocksData map[blockPosition]blockData = make(map[blockPosition]blockData)
 	var airBlocksData map[blockPosition]*airData = make(map[blockPosition]*airData)
 
-	for x := uint8(0); x < 16; x++ {
+	for x := uint8(0); x < 32; x++ {
 
-		for z := uint8(0); z < 16; z++ {
+		for z := uint8(0); z < 32; z++ {
 
-			noiseValue := fractalNoise(int32(x)+(pos.x*16), int32(z)+(pos.z*16), amplitude, 2, 1.5, 0.5, scale)
+			noiseValue := fractalNoise(int32(x)+(pos.x*32), int32(z)+(pos.z*32), amplitude, 2, 1.5, 0.5, scale)
 
-			for y := uint8(0); y < 16; y++ {
+			for y := uint8(0); y < 32; y++ {
 
-				worldY := int16(y) + int16(pos.y*16)
+				worldY := int16(y) + int16(pos.y*32)
 
 				if worldY > noiseValue {
 					airBlocksData[blockPosition{x, y, z}] = &airData{
@@ -159,7 +159,7 @@ func chunk(pos chunkPosition) chunkData {
 					blockType := DirtID
 
 					if worldY < 0 {
-						isCave := fractalNoise3D(int32(x)+(pos.x*16), int32(y)+int32(pos.y*16), int32(z)+(pos.z*16), 2, 15)
+						isCave := fractalNoise3D(int32(x)+(pos.x*32), int32(y)+int32(pos.y*32), int32(z)+(pos.z*32), 2, 15)
 
 						if isCave > 0.1 {
 							airBlocksData[blockPosition{x, y, z}] = &airData{

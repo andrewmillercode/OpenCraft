@@ -27,7 +27,7 @@ func collisions() {
 	for x := -1; x <= 1; x++ {
 		for z := -1; z <= 1; z++ {
 			for y := -3; y <= 3; y++ {
-				currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/16))) + int32(x), int32(math.Floor(float64(cameraPosition[1]/16))) + int32(y), int32(math.Floor(float64(cameraPosition[2]/16))) + int32(z)}
+				currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/32))) + int32(x), int32(math.Floor(float64(cameraPosition[1]/32))) + int32(y), int32(math.Floor(float64(cameraPosition[2]/32))) + int32(z)}
 				
 				prevPlayerChunkPos = currentPlayerChunkPos
 
@@ -38,12 +38,12 @@ func collisions() {
 							for blockZ := pIntZ - 3; blockZ < pIntZ+3; blockZ++ {
 								for blockY := pIntY - 3; blockY < pIntY+3; blockY++ {
 
-									relativeBlockPosition := blockPosition{uint8(blockX - (currentPlayerChunkPos.x * 16)), uint8(blockY - int32(currentPlayerChunkPos.y*16)), uint8(blockZ - (currentPlayerChunkPos.z * 16))}
+									relativeBlockPosition := blockPosition{uint8(blockX - (currentPlayerChunkPos.x * 32)), uint8(blockY - int32(currentPlayerChunkPos.y*32)), uint8(blockZ - (currentPlayerChunkPos.z * 32))}
 
 									if _, exists := chunk.blocksData[relativeBlockPosition]; exists {
 
 										floatBlockPos := mgl32.Vec3{float32(relativeBlockPosition.x), float32(relativeBlockPosition.y), float32(relativeBlockPosition.z)}
-										absoluteBlockPosition := mgl32.Vec3{float32(currentPlayerChunkPos.x*16) + floatBlockPos.X(), float32(currentPlayerChunkPos.y*16) + floatBlockPos.Y(), float32(currentPlayerChunkPos.z*16) + floatBlockPos.Z()}
+										absoluteBlockPosition := mgl32.Vec3{float32(currentPlayerChunkPos.x*32) + floatBlockPos.X(), float32(currentPlayerChunkPos.y*32) + floatBlockPos.Y(), float32(currentPlayerChunkPos.z*32) + floatBlockPos.Z()}
 
 										blockAABB := AABB(
 											absoluteBlockPosition.Sub(mgl32.Vec3{0.5, 0.5, 0.5}),
@@ -189,15 +189,15 @@ func raycast(action bool) {
 	for !(tMaxX > 1 && tMaxY > 1 && tMaxZ > 1) {
 
 		ChunkPos := chunkPosition{
-			int32(math.Floor(float64(hitPoint[0] / 16))),
-			int32(math.Floor(float64(hitPoint[1] / 16))),
-			int32(math.Floor(float64(hitPoint[2] / 16))),
+			int32(math.Floor(float64(hitPoint[0] / 32))),
+			int32(math.Floor(float64(hitPoint[1] / 32))),
+			int32(math.Floor(float64(hitPoint[2] / 32))),
 		}
 
 		pos := blockPosition{
-			uint8(math.Floor(float64(hitPoint[0]) - float64(ChunkPos.x*16))),
-			uint8(math.Floor(float64(hitPoint[1]) - float64(ChunkPos.y*16))),
-			uint8(math.Floor(float64(hitPoint[2]) - float64(ChunkPos.z*16))),
+			uint8(math.Floor(float64(hitPoint[0]) - float64(ChunkPos.x*32))),
+			uint8(math.Floor(float64(hitPoint[1]) - float64(ChunkPos.y*32))),
+			uint8(math.Floor(float64(hitPoint[2]) - float64(ChunkPos.z*32))),
 		}
 		absPos := mgl32.Vec3{
 			float32(math.Floor(float64(hitPoint[0]))),
@@ -237,11 +237,11 @@ func raycast(action bool) {
 		if !action {
 
 			tempChunkPos := chunkPosition{
-				int32(math.Floor(float64(hitPoint[0] / 16))),
-				int32(math.Floor(float64(hitPoint[1] / 16))),
-				int32(math.Floor(float64(hitPoint[2] / 16))),
+				int32(math.Floor(float64(hitPoint[0] / 32))),
+				int32(math.Floor(float64(hitPoint[1] / 32))),
+				int32(math.Floor(float64(hitPoint[2] / 32))),
 			}
-			tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*16))), uint8(math.Floor(float64(hitPoint[1]) - float64(tempChunkPos.y*16))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*16)))}
+			tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*32))), uint8(math.Floor(float64(hitPoint[1]) - float64(tempChunkPos.y*32))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*32)))}
 			if chunk, ok := chunks[tempChunkPos]; ok {
 				if _, ok := chunk.blocksData[tempPos]; ok {
 
