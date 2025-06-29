@@ -6,8 +6,6 @@ import (
 	"github.com/go-gl/mathgl/mgl32"
 )
 
-var prevPlayerChunkPos chunkPosition
-
 func collisions() {
 	isOnGround = false
 
@@ -22,8 +20,6 @@ func collisions() {
 		for z := -1; z <= 1; z++ {
 			for y := -3; y <= 3; y++ {
 				currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/32))) + int32(x), int32(math.Floor(float64(cameraPosition[1]/32))) + int32(y), int32(math.Floor(float64(cameraPosition[2]/32))) + int32(z)}
-
-				prevPlayerChunkPos = currentPlayerChunkPos
 
 				if chunk, ok := chunks[currentPlayerChunkPos]; ok {
 					for i := 0; i < 3; i++ {

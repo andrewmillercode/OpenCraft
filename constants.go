@@ -7,26 +7,26 @@ const (
 	flyingSpeed    float32 = 5
 	walkingSpeed   float32 = 2.3
 	jumpHeight     float32 = 0.25
-	playerWidth float32 = 0.9
-	chunkSize uint8 = 31 // 32x32x32 size chunks, 31 is the max directional index for a block in a chunk
+	playerWidth    float32 = 0.9
+	chunkSize      uint8   = 31 // 32x32x32 size chunks, 31 is the max directional index for a block in a chunk
 )
 
 const (
-	AirID	uint16 = 0
+	AirID   uint16 = 0
 	DirtID  uint16 = 1
 	GrassID uint16 = 2
 	StoneID uint16 = 3
 )
-var CardinalDirections =  []Vec3Int8{
+
+var CardinalDirections = []Vec3Int8{
 	{0, 1, 0}, {0, -1, 0}, // Y-axis
 	{1, 0, 0}, {-1, 0, 0}, // X-axis
 	{0, 0, 1}, {0, 0, -1}, // Z-axis
 }
-var NumOfChunks int32 = 3
+var NumOfChunks int32 = 2
 var AntiAliasing bool = false
 var Vsync bool = false
 var FPSLimit float32 = 240
-
 
 var scale float32 = 30
 var amplitude float32 = 10

@@ -10,9 +10,7 @@ uniform sampler2D texture0;
 float light;
 void main() {
     vec4 baseTexture = texture(texture0, TexCoord);
-    light = (2.0/15) + ((1.0/15.0) * LightLevel);
-    
-    //light levels go from 0(pitch black) to 15(max lighting)
+    light =  (1.0/15.0) + ((1.0/15.0) * LightLevel);
    
      if (OverlayCoord.x != 0){
         color = baseTexture;

@@ -24,15 +24,14 @@ type chunkPositionLighting struct {
 }
 type blockData struct {
 	blockType uint16
-	lightLevel uint8
 }
 
 type chunkData struct {
-	blocksData    map[blockPosition]blockData
-	vao           uint32
-	trisCount     int32
+	blocksData   map[blockPosition]blockData
+	lightSources map[blockPosition]uint8 // position to light level
+	vao          uint32
+	trisCount    int32
 }
-
 
 type aabb struct {
 	Min, Max mgl32.Vec3
