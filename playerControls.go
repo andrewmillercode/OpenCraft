@@ -92,11 +92,12 @@ func raycast(action bool) {
 		if action {
 			if chunk, ok := chunks[ChunkPos]; ok {
 				if _, ok := chunk.blocksData[pos]; ok {
-					chunk.airBlocksData[pos] = &airData{lightLevel: 0}
+					/*
+					chunk.block[pos] = &airData{lightLevel: 0}
 					delete(chunk.blocksData, pos)
 
 					lightPropBreakBlock(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
-
+						*/
 					return
 				}
 			}
@@ -133,14 +134,14 @@ func raycast(action bool) {
 					isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
 					//place a block if there is no block at the position and it is not colliding with the player
 					if _, ok := chunk.blocksData[pos]; !ok && !isCollidingWithPlayer {
-						
+						/*
 						chunk.blocksData[pos] = blockData{
 							blockType: 0,
 						}
 						delete(chunk.airBlocksData, pos)
 
 						lightPropPlaceBlock(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
-
+						*/
 						return
 					}
 

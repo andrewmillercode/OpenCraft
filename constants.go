@@ -1,6 +1,6 @@
 package main
 
-var (
+const (
 	seed           int64   = 1
 	tickUpdateRate float32 = float32(1.0 / 30.0) //tick rate (30 TPS) ticks per second
 	runningSpeed   float32 = 1.3
@@ -8,13 +8,16 @@ var (
 	walkingSpeed   float32 = 2.3
 	jumpHeight     float32 = 0.25
 	playerWidth float32 = 0.9
+	chunkSize uint8 = 31 // 32x32x32 size chunks, 31 is the max directional index for a block in a chunk
 )
-var (
-	DirtID  uint16 = 0
-	GrassID uint16 = 1
-	StoneID uint16 = 2
+
+const (
+	AirID	uint16 = 0
+	DirtID  uint16 = 1
+	GrassID uint16 = 2
+	StoneID uint16 = 3
 )
-var CardinalDirections = []Vec3Int8{
+var CardinalDirections =  []Vec3Int8{
 	{0, 1, 0}, {0, -1, 0}, // Y-axis
 	{1, 0, 0}, {-1, 0, 0}, // X-axis
 	{0, 0, 1}, {0, 0, -1}, // Z-axis

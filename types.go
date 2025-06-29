@@ -24,12 +24,10 @@ type chunkPositionLighting struct {
 }
 type blockData struct {
 	blockType uint16
-}
-type airData struct {
 	lightLevel uint8
 }
+
 type chunkData struct {
-	airBlocksData map[blockPosition]*airData
 	blocksData    map[blockPosition]blockData
 	vao           uint32
 	trisCount     int32

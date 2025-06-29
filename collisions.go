@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+
 	"github.com/go-gl/mathgl/mgl32"
 )
 
@@ -21,7 +22,7 @@ func collisions() {
 		for z := -1; z <= 1; z++ {
 			for y := -3; y <= 3; y++ {
 				currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/32))) + int32(x), int32(math.Floor(float64(cameraPosition[1]/32))) + int32(y), int32(math.Floor(float64(cameraPosition[2]/32))) + int32(z)}
-				
+
 				prevPlayerChunkPos = currentPlayerChunkPos
 
 				if chunk, ok := chunks[currentPlayerChunkPos]; ok {
@@ -33,7 +34,7 @@ func collisions() {
 
 									relativeBlockPosition := blockPosition{uint8(blockX - (currentPlayerChunkPos.x * 32)), uint8(blockY - int32(currentPlayerChunkPos.y*32)), uint8(blockZ - (currentPlayerChunkPos.z * 32))}
 
-									if _, exists := chunk.blocksData[relativeBlockPosition]; exists {
+									if block, exists := chunk.blocksData[relativeBlockPosition]; exists && isSolidBlock(block.blockType) {
 
 										floatBlockPos := mgl32.Vec3{float32(relativeBlockPosition.x), float32(relativeBlockPosition.y), float32(relativeBlockPosition.z)}
 										absoluteBlockPosition := mgl32.Vec3{float32(currentPlayerChunkPos.x*32) + floatBlockPos.X(), float32(currentPlayerChunkPos.y*32) + floatBlockPos.Y(), float32(currentPlayerChunkPos.z*32) + floatBlockPos.Z()}

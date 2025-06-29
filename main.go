@@ -1,7 +1,6 @@
 package main
 
 import (
-	
 	"fmt"
 	"io"
 	"math/rand"
@@ -9,14 +8,17 @@ import (
 	"runtime"
 	"strconv"
 	"time"
-	
+
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/ojrac/opensimplex-go"
+
+	_ "net/http/pprof"
 )
-import _ "net/http/pprof" // Import for side effects
+
+// Import for side effects
 
 var (
 	noise                          = opensimplex.New32(seed)
@@ -27,14 +29,14 @@ var (
 	lastY                  float64
 	firstMouse             bool = true
 	movementSpeed          float32
-	shouldLockMouse 	  bool = true
-	cameraPosition         = mgl32.Vec3{0.0, 50, 15}
-	cameraPositionLerped   = cameraPosition
-	cameraFront            = mgl32.Vec3{0.0, 0.0, -1.0}
-	orientationFront       = mgl32.Vec3{0.0, 0.0, -1.0}
-	cameraUp               = mgl32.Vec3{0.0, 1.0, 0.0}
-	cameraRight            = cameraFront.Cross(cameraUp)
-	velocity               = mgl32.Vec3{0, 0, 0}
+	shouldLockMouse        bool = true
+	cameraPosition              = mgl32.Vec3{0.0, 50, 15}
+	cameraPositionLerped        = cameraPosition
+	cameraFront                 = mgl32.Vec3{0.0, 0.0, -1.0}
+	orientationFront            = mgl32.Vec3{0.0, 0.0, -1.0}
+	cameraUp                    = mgl32.Vec3{0.0, 1.0, 0.0}
+	cameraRight                 = cameraFront.Cross(cameraUp)
+	velocity                    = mgl32.Vec3{0, 0, 0}
 	deltaTime              float32
 	previousFrame          time.Time = time.Now()
 	isOnGround             bool
@@ -147,7 +149,7 @@ func main() {
 		panic(err)
 	}
 	defer glfw.Terminate()
-	
+
 	glfw.WindowHint(glfw.ContextVersionMajor, 3)
 	glfw.WindowHint(glfw.ContextVersionMinor, 3)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
@@ -274,9 +276,9 @@ func main() {
 		view = initViewMatrix()
 		viewLoc = gl.GetUniformLocation(opengl3d, gl.Str("view\x00"))
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
-		
+
 		for chunkPos, chunkData := range chunks {
-			
+
 			if chunkData.trisCount > 0 {
 				//render the chunk
 				modelPos := mgl32.Translate3D(float32(chunkPos.x*32), float32(chunkPos.y*32), float32(chunkPos.z*32))
@@ -285,12 +287,13 @@ func main() {
 				gl.BindVertexArray(chunkData.vao)
 				//wireframe: gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
 				gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
+
 			}
 		}
 
 		if showDebug {
 			//UI RENDERING STAGE
-			
+
 			gl.Disable(gl.DEPTH_TEST)
 			gl.Disable(gl.CULL_FACE)
 
@@ -301,8 +304,8 @@ func main() {
 			gl.UniformMatrix4fv(projectionLoc2D, 1, false, &orthographicProjection[0])
 
 			for i, obj := range textObjects {
-				model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0).Mul4(mgl32.Scale3D(512,512, 1.0))
-				
+				model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0).Mul4(mgl32.Scale3D(512, 512, 1.0))
+
 				modelLoc := gl.GetUniformLocation(opengl2d, gl.Str("model\x00"))
 				gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
 				if obj.Update {

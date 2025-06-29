@@ -10,7 +10,4 @@ require (
 	github.com/ojrac/opensimplex-go v1.0.2
 )
 
-require (
-	github.com/gammazero/deque v1.0.0 // indirect
-	golang.org/x/image v0.22.0 // indirect
-)
+require golang.org/x/image v0.22.0 // indirect
