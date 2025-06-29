@@ -1,7 +1,7 @@
 package main
 
 import (
-	"MinecraftGolang/config"
+	
 	"fmt"
 	"io"
 	"math/rand"
@@ -9,13 +9,14 @@ import (
 	"runtime"
 	"strconv"
 	"time"
-
+	
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/ojrac/opensimplex-go"
 )
+import _ "net/http/pprof" // Import for side effects
 
 var (
 	noise                          = opensimplex.New32(seed)
@@ -69,23 +70,7 @@ func initOpenGL3D() uint32 {
 
 	return prog
 }
-func initOpenGL2D() uint32 {
-	if err := gl.Init(); err != nil {
-		panic(err)
-	}
-	gl.Disable(gl.DEPTH_TEST)
-	gl.Disable(gl.CULL_FACE)
-	vertexShader := loadShader("shaders/textShaderVertex.vert", gl.VERTEX_SHADER)
-	fragmentShader := loadShader("shaders/textShaderFragment.frag", gl.FRAGMENT_SHADER)
-	prog := gl.CreateProgram()
-	gl.AttachShader(prog, vertexShader)
-	gl.AttachShader(prog, fragmentShader)
-	gl.LinkProgram(prog)
-	gl.DetachShader(prog, vertexShader)
-	gl.DetachShader(prog, fragmentShader)
 
-	return prog
-}
 func initProjectionMatrix() mgl32.Mat4 {
 	aspectRatio := float32(1920) / float32(1080)
 	fieldOfView := float32(70)
@@ -162,19 +147,19 @@ func main() {
 		panic(err)
 	}
 	defer glfw.Terminate()
-
+	
 	glfw.WindowHint(glfw.ContextVersionMajor, 3)
 	glfw.WindowHint(glfw.ContextVersionMinor, 3)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
-	window, err := glfw.CreateWindow(1600, 900, "Minecraft in Go", nil, nil)
+	window, err := glfw.CreateWindow(1600, 900, "OpenCraft", nil, nil)
 	window.SetAspectRatio(16, 9)
 	if err != nil {
 		panic(err)
 	}
 	window.MakeContextCurrent()
 	window.SetFramebufferSizeCallback(OnWindowResize)
-	if config.Vsync {
+	if Vsync {
 		glfw.SwapInterval(1)
 	}
 	opengl3d := initOpenGL3D()
@@ -198,7 +183,7 @@ func main() {
 
 	createChunks()
 
-	opengl2d := initOpenGL2D()
+	opengl2d := initOpenGLUI()
 	gl.UseProgram(opengl2d)
 
 	ctx, dst := loadFont("assets/fonts/Mojang-Regular.ttf")
@@ -231,7 +216,7 @@ func main() {
 
 		deltaTime = float32(time.Since(previousFrame).Seconds())
 		previousFrame = time.Now()
-		inputDelayAccumulator += deltaTime
+		clickDelayAccumulator += deltaTime
 		tickAccumulator += deltaTime
 		glfw.PollEvents()
 		//hide mouse

@@ -150,3 +150,21 @@ func updateTextTexture(newContent interface{}, obj *text, ctx *freetype.Context,
 	)
 
 }
+
+func initOpenGLUI() uint32 {
+	if err := gl.Init(); err != nil {
+		panic(err)
+	}
+	gl.Disable(gl.DEPTH_TEST)
+	gl.Disable(gl.CULL_FACE)
+	vertexShader := loadShader("shaders/textShaderVertex.vert", gl.VERTEX_SHADER)
+	fragmentShader := loadShader("shaders/textShaderFragment.frag", gl.FRAGMENT_SHADER)
+	prog := gl.CreateProgram()
+	gl.AttachShader(prog, vertexShader)
+	gl.AttachShader(prog, fragmentShader)
+	gl.LinkProgram(prog)
+	gl.DetachShader(prog, vertexShader)
+	gl.DetachShader(prog, fragmentShader)
+
+	return prog
+}

@@ -7,12 +7,22 @@ var (
 	flyingSpeed    float32 = 5
 	walkingSpeed   float32 = 2.3
 	jumpHeight     float32 = 0.25
+	playerWidth float32 = 0.9
 )
 var (
 	DirtID  uint16 = 0
 	GrassID uint16 = 1
 	StoneID uint16 = 2
 )
+
+var NumOfChunks int32 = 3
+var AntiAliasing bool = false
+var Vsync bool = false
+var FPSLimit float32 = 240
+
+
+var scale float32 = 30
+var amplitude float32 = 10
 
 var CubeVertices []float32 = []float32{
 
