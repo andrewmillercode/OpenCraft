@@ -155,269 +155,244 @@ func getTextureCoords(blockID uint16, faceIndex uint8) []float32 {
 	return []float32{u1, v1, u2, v2}
 
 }
-func BFSLightProp(lightSources []chunkBlockPositions) map[chunkBlockPositions]struct{} {
+func BFSLightProp(lightSources []chunkBlockPositions, inversePropagation bool) map[chunkBlockPositions]struct{} {
 	// Use slice-based queue for much better performance than container/list
 	const initialCapacity = 10000
 	queue := make([]chunkBlockPositions, 0, initialCapacity)
 	visited := make(map[chunkBlockPositions]struct{}, initialCapacity)
 	head := 0
 
-	for _, source := range lightSources {
-		queue = append(queue, source)
-		visited[source] = struct{}{}
-	}
-
-	// Process queue using array-based approach
-	for head < len(queue) {
-		cur := queue[head]
-		head++
-
-		// Cache chunk lookup for performance
-		currentChunk, ok := chunks[cur.chunkPos]
-		if !ok {
-			continue
+	if inversePropagation {
+		// Inverse propagation: remove light
+		for _, source := range lightSources {
+			queue = append(queue, source)
+			visited[source] = struct{}{}
 		}
 
-		lightSources := currentChunk.lightSources
-		x, y, z := cur.blockPos.x, cur.blockPos.y, cur.blockPos.z
-		lightLevel := lightSources[cur.blockPos]
+		// Process removal queue
+		for head < len(queue) {
+			cur := queue[head]
+			head++
 
-		// Stop propagating if light is too dim
-		if lightLevel <= 0 {
-			continue
-		}
-
-		newLightLevel := lightLevel - 1
-
-		// Process all 6 neighbors with unrolled loops for maximum speed
-
-		// Front (z+1)
-		if z < chunkSize {
-			neighborPos := blockPosition{x, y, z + 1}
-			neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
-			if _, seen := visited[neighbor]; !seen {
-				if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
-					lightSources[neighborPos] = newLightLevel
-					queue = append(queue, neighbor)
-					visited[neighbor] = struct{}{}
-				}
+			currentChunk, ok := chunks[cur.chunkPos]
+			if !ok {
+				continue
 			}
-		} else {
-			// Cross-chunk boundary - front
-			if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
-				neighbor := chunkBlockPositions{adjChunk, adjBlock}
-				if _, seen := visited[neighbor]; !seen {
-					adjChunkData := chunks[adjChunk]
-					if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
-						adjChunkData.lightSources[adjBlock] = newLightLevel
-						queue = append(queue, neighbor)
-						visited[neighbor] = struct{}{}
+
+			lightLevel := currentChunk.lightSources[cur.blockPos]
+
+			// Remove light at this position
+			delete(currentChunk.lightSources, cur.blockPos)
+
+			// Check all 6 neighbors
+			for i := uint8(0); i < 6; i++ {
+				if adjExists, _, adjChunk, adjBlock, adjLightLevel := getAdjBlockFromFace(cur.blockPos, cur.chunkPos, i, true); adjExists {
+					neighbor := chunkBlockPositions{adjChunk, adjBlock}
+					if _, seen := visited[neighbor]; !seen && adjLightLevel > 0 {
+						// For sunlight (level 15), remove all light below it
+						if lightLevel == 15 && i == 5 { // Down face and sunlight
+							queue = append(queue, neighbor)
+							visited[neighbor] = struct{}{}
+						} else if adjLightLevel < lightLevel { // Normal light removal
+							queue = append(queue, neighbor)
+							visited[neighbor] = struct{}{}
+						} else if adjLightLevel == lightLevel-1 { // Light that came from this source
+							queue = append(queue, neighbor)
+							visited[neighbor] = struct{}{}
+						}
 					}
 				}
 			}
 		}
+	} else {
+		// Normal propagation (your existing code)
+		for _, source := range lightSources {
+			queue = append(queue, source)
+			visited[source] = struct{}{}
+		}
 
-		// Back (z-1)
-		if z > 0 {
-			neighborPos := blockPosition{x, y, z - 1}
-			neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
-			if _, seen := visited[neighbor]; !seen {
-				if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
-					lightSources[neighborPos] = newLightLevel
-					queue = append(queue, neighbor)
-					visited[neighbor] = struct{}{}
-				}
+		// Process queue using array-based approach
+		for head < len(queue) {
+			cur := queue[head]
+			head++
+
+			// Cache chunk lookup for performance
+			currentChunk, ok := chunks[cur.chunkPos]
+			if !ok {
+				continue
 			}
-		} else {
-			// Cross-chunk boundary - back
-			if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
-				neighbor := chunkBlockPositions{adjChunk, adjBlock}
+
+			lightSources := currentChunk.lightSources
+			x, y, z := cur.blockPos.x, cur.blockPos.y, cur.blockPos.z
+			lightLevel := lightSources[cur.blockPos]
+
+			// Stop propagating if light is too dim
+			if lightLevel <= 0 {
+				continue
+			}
+
+			newLightLevel := lightLevel - 1
+
+			// Process all 6 neighbors with unrolled loops for maximum speed
+
+			// Front (z+1)
+			if z < chunkSize {
+				neighborPos := blockPosition{x, y, z + 1}
+				neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
 				if _, seen := visited[neighbor]; !seen {
-					adjChunkData := chunks[adjChunk]
-					if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
-						adjChunkData.lightSources[adjBlock] = newLightLevel
+					if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
+						lightSources[neighborPos] = newLightLevel
 						queue = append(queue, neighbor)
 						visited[neighbor] = struct{}{}
 					}
 				}
-			}
-		}
-
-		// Right (x+1)
-		if x < chunkSize {
-			neighborPos := blockPosition{x + 1, y, z}
-			neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
-			if _, seen := visited[neighbor]; !seen {
-				if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
-					lightSources[neighborPos] = newLightLevel
-					queue = append(queue, neighbor)
-					visited[neighbor] = struct{}{}
+			} else {
+				// Cross-chunk boundary - front
+				if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
+					neighbor := chunkBlockPositions{adjChunk, adjBlock}
+					if _, seen := visited[neighbor]; !seen {
+						adjChunkData := chunks[adjChunk]
+						if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
+							adjChunkData.lightSources[adjBlock] = newLightLevel
+							queue = append(queue, neighbor)
+							visited[neighbor] = struct{}{}
+						}
+					}
 				}
 			}
-		} else {
-			// Cross-chunk boundary - right
-			if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
-				neighbor := chunkBlockPositions{adjChunk, adjBlock}
+
+			// Back (z-1)
+			if z > 0 {
+				neighborPos := blockPosition{x, y, z - 1}
+				neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
 				if _, seen := visited[neighbor]; !seen {
-					adjChunkData := chunks[adjChunk]
-					if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
-						adjChunkData.lightSources[adjBlock] = newLightLevel
+					if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
+						lightSources[neighborPos] = newLightLevel
 						queue = append(queue, neighbor)
 						visited[neighbor] = struct{}{}
 					}
 				}
-			}
-		}
-
-		// Left (x-1)
-		if x > 0 {
-			neighborPos := blockPosition{x - 1, y, z}
-			neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
-			if _, seen := visited[neighbor]; !seen {
-				if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
-					lightSources[neighborPos] = newLightLevel
-					queue = append(queue, neighbor)
-					visited[neighbor] = struct{}{}
+			} else {
+				// Cross-chunk boundary - back
+				if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
+					neighbor := chunkBlockPositions{adjChunk, adjBlock}
+					if _, seen := visited[neighbor]; !seen {
+						adjChunkData := chunks[adjChunk]
+						if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
+							adjChunkData.lightSources[adjBlock] = newLightLevel
+							queue = append(queue, neighbor)
+							visited[neighbor] = struct{}{}
+						}
+					}
 				}
 			}
-		} else {
-			// Cross-chunk boundary - left
-			if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
-				neighbor := chunkBlockPositions{adjChunk, adjBlock}
+
+			// Right (x+1)
+			if x < chunkSize {
+				neighborPos := blockPosition{x + 1, y, z}
+				neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
 				if _, seen := visited[neighbor]; !seen {
-					adjChunkData := chunks[adjChunk]
-					if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
-						adjChunkData.lightSources[adjBlock] = newLightLevel
+					if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
+						lightSources[neighborPos] = newLightLevel
 						queue = append(queue, neighbor)
 						visited[neighbor] = struct{}{}
 					}
 				}
-			}
-		}
-
-		// Up (y+1)
-		if y < chunkSize {
-			neighborPos := blockPosition{x, y + 1, z}
-			neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
-			if _, seen := visited[neighbor]; !seen {
-				if currentLight, exists := lightSources[neighborPos]; exists && currentLight < lightLevel {
-					lightSources[neighborPos] = lightLevel
-					queue = append(queue, neighbor)
-					visited[neighbor] = struct{}{}
+			} else {
+				// Cross-chunk boundary - right
+				if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
+					neighbor := chunkBlockPositions{adjChunk, adjBlock}
+					if _, seen := visited[neighbor]; !seen {
+						adjChunkData := chunks[adjChunk]
+						if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
+							adjChunkData.lightSources[adjBlock] = newLightLevel
+							queue = append(queue, neighbor)
+							visited[neighbor] = struct{}{}
+						}
+					}
 				}
 			}
-		} else {
-			// Cross-chunk boundary - up
-			if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
-				neighbor := chunkBlockPositions{adjChunk, adjBlock}
+
+			// Left (x-1)
+			if x > 0 {
+				neighborPos := blockPosition{x - 1, y, z}
+				neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
 				if _, seen := visited[neighbor]; !seen {
-					adjChunkData := chunks[adjChunk]
-					if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < lightLevel {
-						adjChunkData.lightSources[adjBlock] = lightLevel
+					if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
+						lightSources[neighborPos] = newLightLevel
 						queue = append(queue, neighbor)
 						visited[neighbor] = struct{}{}
 					}
 				}
-			}
-		}
-
-		// Down (y-1)
-		if y > 0 {
-			neighborPos := blockPosition{x, y - 1, z}
-			neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
-			if _, seen := visited[neighbor]; !seen {
-				if currentLight, exists := lightSources[neighborPos]; exists && currentLight < lightLevel {
-					lightSources[neighborPos] = lightLevel
-					queue = append(queue, neighbor)
-					visited[neighbor] = struct{}{}
+			} else {
+				// Cross-chunk boundary - left
+				if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
+					neighbor := chunkBlockPositions{adjChunk, adjBlock}
+					if _, seen := visited[neighbor]; !seen {
+						adjChunkData := chunks[adjChunk]
+						if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
+							adjChunkData.lightSources[adjBlock] = newLightLevel
+							queue = append(queue, neighbor)
+							visited[neighbor] = struct{}{}
+						}
+					}
 				}
 			}
-		} else {
-			// Cross-chunk boundary - down
-			if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
-				neighbor := chunkBlockPositions{adjChunk, adjBlock}
+
+			// Up (y+1)
+			if y < chunkSize {
+				neighborPos := blockPosition{x, y + 1, z}
+				neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
 				if _, seen := visited[neighbor]; !seen {
-					adjChunkData := chunks[adjChunk]
-					if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < lightLevel {
-						adjChunkData.lightSources[adjBlock] = lightLevel
+					if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
+						lightSources[neighborPos] = newLightLevel
 						queue = append(queue, neighbor)
 						visited[neighbor] = struct{}{}
+					}
+				}
+			} else {
+				// Cross-chunk boundary - up
+				if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
+					neighbor := chunkBlockPositions{adjChunk, adjBlock}
+					if _, seen := visited[neighbor]; !seen {
+						adjChunkData := chunks[adjChunk]
+						if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
+							adjChunkData.lightSources[adjBlock] = newLightLevel
+							queue = append(queue, neighbor)
+							visited[neighbor] = struct{}{}
+						}
+					}
+				}
+			}
+
+			// Down (y-1)
+			if y > 0 {
+				neighborPos := blockPosition{x, y - 1, z}
+				neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
+				if _, seen := visited[neighbor]; !seen {
+					if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
+						lightSources[neighborPos] = newLightLevel
+						queue = append(queue, neighbor)
+						visited[neighbor] = struct{}{}
+					}
+				}
+			} else {
+				// Cross-chunk boundary - down
+				if adjExists, adjChunk, adjBlock := getAdjBorderBlock(cur.blockPos, cur.chunkPos); adjExists {
+					neighbor := chunkBlockPositions{adjChunk, adjBlock}
+					if _, seen := visited[neighbor]; !seen {
+						adjChunkData := chunks[adjChunk]
+						if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
+							adjChunkData.lightSources[adjBlock] = newLightLevel
+							queue = append(queue, neighbor)
+							visited[neighbor] = struct{}{}
+						}
 					}
 				}
 			}
 		}
 	}
 	return visited
-}
-
-func DFSLightPropWithChunkUpdates(blocks []chunkBlockPositions, chunksAffected map[chunkPosition]struct{}) map[chunkPosition]struct{} {
-	/*
-
-
-			visited := make(map[chunkBlockPositions]struct{})
-			head := 0
-			for head < len(blocks) {
-				cur := blocks[head]
-				head++
-
-				if _, e := visited[cur]; e {
-					continue
-				}
-				//fmt.Printf("a %d\n", len(blocks))
-				visited[cur] = struct{}{}
-				chunksAffected[cur.chunkPos] = struct{}{}
-				currentChunk := chunks[cur.chunkPos]
-				icX, icY, icZ := int(cur.blockPos.x), int(cur.blockPos.y), int(cur.blockPos.z)
-				lightLevel := currentChunk.airBlocksData[cur.blockPos].lightLevel
-
-				if lightLevel == 0 {
-					continue
-				}
-
-				for _, dir := range CardinalDirections {
-
-					neighborPos := blockPosition{
-						x: uint8(icX + dir.x),
-						y: uint8(icY + dir.y),
-						z: uint8(icZ + dir.z),
-					}
-
-					if icY+dir.y == -1 || icY+dir.y == 32 || icX+dir.x == -1 || icX+dir.x == 32 || icZ+dir.z == -1 || icZ+dir.z == 32 {
-						isBordering, borderingChunk, borderingBlock := ReturnBorderingAirBlock(cur.blockPos, cur.chunkPos)
-						if isBordering {
-							if dir.y == -1 && lightLevel == 15 {
-								chunks[borderingChunk].airBlocksData[borderingBlock].lightLevel = 15
-								blocks = append(blocks, chunkBlockPositions{borderingChunk, borderingBlock})
-							} else if chunks[borderingChunk].airBlocksData[borderingBlock].lightLevel < lightLevel {
-								blocks = append(blocks, chunkBlockPositions{borderingChunk, borderingBlock})
-
-								chunks[borderingChunk].airBlocksData[borderingBlock].lightLevel = lightLevel - 1
-
-							}
-
-						}
-						continue
-					}
-
-					if neighborData, exists := currentChunk.airBlocksData[neighborPos]; exists {
-						if dir.y == -1 && lightLevel == 15 {
-							currentChunk.airBlocksData[neighborPos].lightLevel = 15
-							blocks = append(blocks, chunkBlockPositions{cur.chunkPos, neighborPos})
-						} else if neighborData.lightLevel < lightLevel {
-							blocks = append(blocks, chunkBlockPositions{cur.chunkPos, neighborPos})
-							currentChunk.airBlocksData[neighborPos].lightLevel = lightLevel - 1
-
-						}
-
-					}
-
-				}
-			}
-			return chunksAffected
-
-		return make(map[chunkPosition]struct{})
-	*/
-	return make(map[chunkPosition]struct{})
 }
 
 func propagateSunLightGlobal() {
@@ -454,173 +429,42 @@ func propagateSunLightGlobal() {
 		}
 	}
 
-	BFSLightProp(blocks)
+	BFSLightProp(blocks, false)
 
 }
 
-func lightPropPlaceBlock(editedBlockChunkCoord chunkPositionLighting, editedBlockChunk chunkPosition, editedBlock blockPosition) {
-	/*
-		var blocks []chunkBlockPositions
-		var chunkPos chunkPosition
-		var chunksAffected map[chunkPosition]struct{} = make(map[chunkPosition]struct{})
-		chunklets := lightingChunks[editedBlockChunkCoord]
+func createBlockShadow(newBlock chunkBlockPositions) []chunkBlockPositions {
+	var blocks []chunkBlockPositions
+	var chunkPos chunkPosition = newBlock.chunkPos
 
-		for x := uint8(0); x < 32; x++ {
-			for z := uint8(0); z < 32; z++ {
+	chunklets := lightingChunks[chunkPositionLighting{newBlock.chunkPos.x, newBlock.chunkPos.z}]
+	x := newBlock.blockPos.x
+	y := newBlock.blockPos.y - 1 // start from the air block below
+	z := newBlock.blockPos.z
 
-				i := 0
-				chunkPos = chunklets[i]
-				y := uint8(chunkSize)
-				hitBlock := false
-				for globalY := int32(256); globalY > -240; globalY-- {
+	i := int32(len(chunklets)/2) / (chunkPos.y * int32(chunkSize))
+	chunkPos = chunklets[i]
 
-					y--
-					if globalY%32 == 0 {
-						i++
-						y = chunkSize
-						if i >= len(chunklets) {
-							break // Prevent out-of-bounds access
-						}
-						chunkPos = chunklets[i]
-					}
+	for globalY := int32(256); globalY > -240; globalY-- {
 
-					blockPos := blockPosition{x, y, z}
-
-					if _, exists := chunks[chunkPos].airBlocksData[blockPos]; exists {
-						if hitBlock {
-							chunks[chunkPos].airBlocksData[blockPos].lightLevel = 0
-						} else {
-							blocks = append(blocks, chunkBlockPositions{chunkPos, blockPos})
-							chunks[chunkPos].airBlocksData[blockPos].lightLevel = 15
-						}
-						continue
-
-					}
-					hitBlock = true
-				}
-			}
-		}
-		_, borderingChunks := ReturnBorderingChunks(editedBlock, editedBlockChunk)
-		for _, i := range borderingChunks {
-			chunksAffected[i] = struct{}{}
-		}
-		chunksAffected[editedBlockChunk] = struct{}{}
-
-
-		for _, i := range CardinalDirections {
-			x := i.x
-			y := i.y
-			z := i.z
-			if int(editedBlock.x)+x >= 0 && int(editedBlock.x)+x < 32 && int(editedBlock.y)+y >= 0 && int(editedBlock.y)+y < 32 && int(editedBlock.z)+z >= 0 && int(editedBlock.z)+z < 32 {
-				pos := blockPosition{editedBlock.x + uint8(x), editedBlock.y + uint8(y), editedBlock.z + uint8(z)}
-				if _, exists := chunks[editedBlockChunk].airBlocksData[pos]; exists {
-					blocks = append(blocks, chunkBlockPositions{editedBlockChunk, pos})
-				}
-				continue
-			}
-
-			//chunk border
-			isBorderingChunk, chunkBorder, chunkBorderBlock := ReturnBorderingAirBlock(editedBlock, editedBlockChunk)
-			if isBorderingChunk {
-				chunksAffected[chunkBorder] = struct{}{}
-				blocks = append(blocks, chunkBlockPositions{chunkBorder, chunkBorderBlock})
-			}
-
-		}
-		chunksAffected = DFSLightPropWithChunkUpdates(blocks, chunksAffected)
-		//update chunks
-		for chunkPos := range chunksAffected {
-
-			vao, trisCount := createChunkVAO(chunks[chunkPos].blocksData, chunkPos)
-			chunks[chunkPos] = chunkData{
-				blocksData: chunks[chunkPos].blocksData,
-				vao:        vao,
-
-				trisCount:     trisCount,
-				airBlocksData: chunks[chunkPos].airBlocksData,
-			}
-		}
-	*/
-}
-
-func lightPropBreakBlock(editedBlockChunkCoord chunkPositionLighting, editedBlockChunk chunkPosition, editedBlock blockPosition) {
-	/*
-		var blocks []chunkBlockPositions
-		var chunksAffected map[chunkPosition]struct{} = make(map[chunkPosition]struct{})
-		chunklets := lightingChunks[editedBlockChunkCoord]
-
-		x := editedBlock.x
-		z := editedBlock.z
-		i := 0
-		y := uint8(0)
-		chunkPos := chunklets[i]
-
-		for globalY := int32(256); globalY > -240; globalY-- {
-
-			y--
-			if globalY%16 == 0 {
-				i++
-				y = 15
-				chunkPos = chunklets[i]
-			}
-
-			blockPos := blockPosition{x, y, z}
-
-			if value, exists := chunks[chunkPos].airBlocksData[blockPos]; exists {
-
-				if value.lightLevel < 15 {
-					chunks[chunkPos].airBlocksData[blockPos].lightLevel = 15
-					chunksAffected[chunkPos] = struct{}{}
-					blocks = append(blocks, chunkBlockPositions{chunkPos, blockPos})
-				}
-				continue
-
-			}
-			break
+		y--
+		if y == 0 {
+			i++
+			y = chunkSize
+			chunkPos = chunklets[i]
 		}
 
-		_, borderingChunks := ReturnBorderingChunks(editedBlock, editedBlockChunk)
-		for _, i := range borderingChunks {
-			chunksAffected[i] = struct{}{}
+		blockPos := blockPosition{x, y, z}
+
+		if _, exists := chunks[chunkPos].lightSources[blockPos]; exists {
+			blocks = append(blocks, chunkBlockPositions{chunkPos, blockPos})
+			chunks[chunkPos].lightSources[blockPos] = uint8(0)
+			continue
 		}
-		chunksAffected[editedBlockChunk] = struct{}{}
+		break
+	}
 
-
-		for _, i := range CardinalDirections {
-			x := i.x
-			y := i.y
-			z := i.z
-			if int(editedBlock.x)+x >= 0 && int(editedBlock.x)+x < 32 && int(editedBlock.y)+y >= 0 && int(editedBlock.y)+y < 32 && int(editedBlock.z)+z >= 0 && int(editedBlock.z)+z < 32 {
-				pos := blockPosition{editedBlock.x + uint8(x), editedBlock.y + uint8(y), editedBlock.z + uint8(z)}
-				if _, exists := chunks[editedBlockChunk].airBlocksData[pos]; exists {
-					blocks = append(blocks, chunkBlockPositions{editedBlockChunk, pos})
-				}
-				continue
-			}
-
-			//chunk border
-			isBorderingChunk, chunkBorder, chunkBorderBlock := ReturnBorderingAirBlock(editedBlock, editedBlockChunk)
-			if isBorderingChunk {
-				chunksAffected[chunkBorder] = struct{}{}
-				blocks = append(blocks, chunkBlockPositions{chunkBorder, chunkBorderBlock})
-			}
-
-		}
-
-		chunksAffected = DFSLightPropWithChunkUpdates(blocks, chunksAffected)
-		//update chunks
-		for chunkPos := range chunksAffected {
-
-			vao, trisCount := createChunkVAO(chunks[chunkPos].blocksData, chunkPos)
-			chunks[chunkPos] = chunkData{
-				blocksData: chunks[chunkPos].blocksData,
-				vao:        vao,
-
-				trisCount:     trisCount,
-				airBlocksData: chunks[chunkPos].airBlocksData,
-			}
-		}
-	*/
+	return blocks
 }
 
 func fractalNoise(x int32, z int32, amplitude float32, octaves int, lacunarity float32, persistence float32, scale float32) int16 {
@@ -663,7 +507,7 @@ func fractalNoise3D(x int32, y int32, z int32, amplitude float32, scale float32)
 
 // face = 0(front) 1(back) 2(right) 3(left) 4(up) 5(down)
 // return type: exists, blockData, fromAdjChunk
-func getAdjBlockFromFace(key blockPosition, chunkPos chunkPosition, face uint8, lightSource bool) (bool, blockData, uint8) {
+func getAdjBlockFromFace(key blockPosition, chunkPos chunkPosition, face uint8, lightSource bool) (bool, blockData, chunkPosition, blockPosition, uint8) {
 	var adjChunk chunkPosition
 	var adjBlock blockPosition
 
@@ -709,14 +553,14 @@ func getAdjBlockFromFace(key blockPosition, chunkPos chunkPosition, face uint8, 
 	if chunk, ok := chunks[adjChunk]; ok {
 		if lightSource {
 			if _lightLevel, ok := chunk.lightSources[adjBlock]; ok {
-				return true, blockData{}, _lightLevel
+				return true, blockData{}, adjChunk, adjBlock, _lightLevel
 			}
 		}
 		if _blockData, ok := chunk.blocksData[adjBlock]; ok {
-			return true, _blockData, 0
+			return true, _blockData, adjChunk, adjBlock, 0
 		}
 	}
-	return false, blockData{}, 0
+	return false, blockData{}, chunkPosition{}, blockPosition{}, 0
 }
 func isSolidBlock(blockType uint16) bool {
 	switch blockType {
@@ -731,8 +575,8 @@ var grassTint = mgl32.Vec3{0.486, 0.741, 0.419}
 var noTint = mgl32.Vec3{1.0, 1.0, 1.0}
 
 func GenerateBlockFace(key blockPosition, chunkPos chunkPosition, faceIndex uint8, vertexOffset int, verts *[]float32, i int, self blockData, y, z, x float32, curTint mgl32.Vec3, u, v uint8, useTextureOverlay bool) int {
-	adjExists, adjBlock, _ := getAdjBlockFromFace(key, chunkPos, faceIndex, false)
-	_, _, adjLightlevel := getAdjBlockFromFace(key, chunkPos, faceIndex, true)
+	adjExists, adjBlock, _, _, _ := getAdjBlockFromFace(key, chunkPos, faceIndex, false)
+	_, _, _, _, adjLightlevel := getAdjBlockFromFace(key, chunkPos, faceIndex, true)
 	isAdjSolid := isSolidBlock(adjBlock.blockType)
 
 	if adjExists && isAdjSolid {
@@ -946,7 +790,7 @@ func breakBlock(pos blockPosition, chunkPos chunkPosition) {
 
 	for i := uint8(0); i < 6; i++ {
 		// Check all 6 faces for adjacent light sources
-		if adjExists, _, adjLightLevel := getAdjBlockFromFace(pos, chunkPos, i, true); adjExists && adjLightLevel > 0 {
+		if adjExists, _, _, _, adjLightLevel := getAdjBlockFromFace(pos, chunkPos, i, true); adjExists && adjLightLevel > 0 {
 
 			// Sunlight from directly above propagates downwards at full strength.
 			if i == 4 && adjLightLevel == 15 {
@@ -969,7 +813,7 @@ func breakBlock(pos blockPosition, chunkPos chunkPosition) {
 	// 4. Propagate the new light outwards from this block.
 	var visitedArea map[chunkBlockPositions]struct{} = make(map[chunkBlockPositions]struct{})
 	if len(repropagationQueue) > 0 {
-		visitedArea = BFSLightProp(repropagationQueue)
+		visitedArea = BFSLightProp(repropagationQueue, false)
 	}
 	// Update affected chunks
 	chunksToUpdate := make(map[chunkPosition]chunkData)
@@ -983,6 +827,32 @@ func breakBlock(pos blockPosition, chunkPos chunkPosition) {
 	chunksToUpdate[chunkPos] = chunks[chunkPos]
 	GenerateChunkMeshes(&chunksToUpdate)
 }
+func placeBlock(pos blockPosition, chunkPos chunkPosition, blockType uint16) {
+	chunksToUpdate := make(map[chunkPosition]chunkData)
+
+	delete(chunks[chunkPos].lightSources, pos)
+	chunks[chunkPos].blocksData[pos] = blockData{
+		blockType: blockType,
+	}
+
+	//make vertical shadow
+	shadowBlocks := createBlockShadow(chunkBlockPositions{chunkPos, pos})
+	for _, shadowBlock := range shadowBlocks {
+		chunksToUpdate[shadowBlock.chunkPos] = chunks[shadowBlock.chunkPos]
+	}
+
+	//fill in shadow with reverse propagation
+	affectedBFSChunks := BFSLightProp(shadowBlocks, true)
+	for data := range affectedBFSChunks {
+		chunksToUpdate[data.chunkPos] = chunks[data.chunkPos]
+	}
+
+	chunksToUpdate[chunkPos] = chunks[chunkPos]
+	GenerateChunkMeshes(&chunksToUpdate)
+	return
+
+}
+
 func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []chunkPosition) {
 
 	var borderingChunks []chunkPosition
