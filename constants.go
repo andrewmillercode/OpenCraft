@@ -14,7 +14,11 @@ var (
 	GrassID uint16 = 1
 	StoneID uint16 = 2
 )
-
+var CardinalDirections = []Vec3Int8{
+	{0, 1, 0}, {0, -1, 0}, // Y-axis
+	{1, 0, 0}, {-1, 0, 0}, // X-axis
+	{0, 0, 1}, {0, 0, -1}, // Z-axis
+}
 var NumOfChunks int32 = 3
 var AntiAliasing bool = false
 var Vsync bool = false

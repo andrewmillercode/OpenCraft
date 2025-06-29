@@ -7,12 +7,12 @@ type blockPosition struct {
 	y uint8
 	z uint8
 }
-
-type Vec3Int struct {
-	x int
-	y int
-	z int
+type Vec3Int8 struct {
+	x int8
+	y int8
+	z int8
 }
+
 type chunkPosition struct {
 	x int32
 	y int32

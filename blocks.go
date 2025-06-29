@@ -6,9 +6,9 @@ import (
 	"image/draw"
 	"image/png"
 	"os"
-	
-	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
+	"github.com/go-gl/gl/v4.1-core/gl"
+	
 )
 
 var chunks map[chunkPosition]chunkData = make(map[chunkPosition]chunkData)
@@ -16,11 +16,6 @@ var chunks map[chunkPosition]chunkData = make(map[chunkPosition]chunkData)
 var lightingChunks map[chunkPositionLighting][]chunkPosition = make(map[chunkPositionLighting][]chunkPosition)
 
 
-var directions = []Vec3Int{
-	{0, 1, 0}, {0, -1, 0}, // Y-axis
-	{1, 0, 0}, {-1, 0, 0}, // X-axis
-	{0, 0, 1}, {0, 0, -1}, // Z-axis
-}
 func (blockPos blockPosition) isEqual(blockPosCompare blockPosition) bool {
 
 	if blockPos.x == blockPosCompare.x && blockPos.y == blockPosCompare.y && blockPos.z == blockPosCompare.z {
@@ -137,22 +132,22 @@ func DFSLightProp(blocks []chunkBlockPositions) {
 			}
 			
 
-			icX, icY, icZ := int(cur.blockPos.x), int(cur.blockPos.y), int(cur.blockPos.z)
+			x, y, z := cur.blockPos.x, cur.blockPos.y, cur.blockPos.z
 			lightLevel := currentChunk.airBlocksData[cur.blockPos].lightLevel
-
+			iX, iY, iZ := int8(x), int8(y), int8(z)
 			if lightLevel == 0 {
 				continue
 			}
 
-			for _, dir := range directions {
+			for _, dir := range CardinalDirections {
 
 				neighborPos := blockPosition{
-					x: uint8(icX + dir.x),
-					y: uint8(icY + dir.y),
-					z: uint8(icZ + dir.z),
+					x: x + uint8(dir.x),
+					y: y + uint8(dir.y),
+					z: z + uint8(dir.z),
 				}
 
-				if icY+dir.y == -1 || icY+dir.y == 32 || icX+dir.x == -1 || icX+dir.x == 32 || icZ+dir.z == -1 || icZ+dir.z == 32 {
+				if iY+dir.y == -1 || iY+dir.y == 32 || iX+dir.x == -1 || iX+dir.x == 32 || iZ+dir.z == -1 || iZ+dir.z == 32 {
 					isBordering, borderingChunk, borderingBlock := ReturnBorderingAirBlock(cur.blockPos, cur.chunkPos)
 					if isBordering {
 						if dir.y == -1 && lightLevel == 15 {
@@ -188,7 +183,7 @@ func DFSLightProp(blocks []chunkBlockPositions) {
 }
 
 func DFSLightPropWithChunkUpdates(blocks []chunkBlockPositions, chunksAffected map[chunkPosition]struct{}) map[chunkPosition]struct{} {
-
+	/*
 	
 
 		visited := make(map[chunkBlockPositions]struct{})
@@ -211,7 +206,7 @@ func DFSLightPropWithChunkUpdates(blocks []chunkBlockPositions, chunksAffected m
 				continue
 			}
 
-			for _, dir := range directions {
+			for _, dir := range CardinalDirections {
 
 				neighborPos := blockPosition{
 					x: uint8(icX + dir.x),
@@ -252,6 +247,8 @@ func DFSLightPropWithChunkUpdates(blocks []chunkBlockPositions, chunksAffected m
 		}
 		return chunksAffected
 	
+	return make(map[chunkPosition]struct{})
+	*/
 	return make(map[chunkPosition]struct{})
 }
 
@@ -296,7 +293,7 @@ func propagateSunLightGlobal() {
 }
 
 func lightPropPlaceBlock(editedBlockChunkCoord chunkPositionLighting, editedBlockChunk chunkPosition, editedBlock blockPosition) {
-		
+	/*
 		var blocks []chunkBlockPositions
 		var chunkPos chunkPosition
 		var chunksAffected map[chunkPosition]struct{} = make(map[chunkPosition]struct{})
@@ -343,12 +340,8 @@ func lightPropPlaceBlock(editedBlockChunkCoord chunkPositionLighting, editedBloc
 		}
 		chunksAffected[editedBlockChunk] = struct{}{}
 
-		var directions = []Vec3Int{
-			{0, 1, 0}, {0, -1, 0}, // Y-axis
-			{1, 0, 0}, {-1, 0, 0}, // X-axis
-			{0, 0, 1}, {0, 0, -1}, // Z-axis
-		}
-		for _, i := range directions {
+		
+		for _, i := range CardinalDirections {
 			x := i.x
 			y := i.y
 			z := i.z
@@ -381,11 +374,11 @@ func lightPropPlaceBlock(editedBlockChunkCoord chunkPositionLighting, editedBloc
 				airBlocksData: chunks[chunkPos].airBlocksData,
 			}
 		}
-	
+	*/
 }
 
 func lightPropBreakBlock(editedBlockChunkCoord chunkPositionLighting, editedBlockChunk chunkPosition, editedBlock blockPosition) {
-	
+	/*
 		var blocks []chunkBlockPositions
 		var chunksAffected map[chunkPosition]struct{} = make(map[chunkPosition]struct{})
 		chunklets := lightingChunks[editedBlockChunkCoord]
@@ -426,12 +419,8 @@ func lightPropBreakBlock(editedBlockChunkCoord chunkPositionLighting, editedBloc
 		}
 		chunksAffected[editedBlockChunk] = struct{}{}
 
-		var directions = []Vec3Int{
-			{0, 1, 0}, {0, -1, 0}, // Y-axis
-			{1, 0, 0}, {-1, 0, 0}, // X-axis
-			{0, 0, 1}, {0, 0, -1}, // Z-axis
-		}
-		for _, i := range directions {
+		
+		for _, i := range CardinalDirections {
 			x := i.x
 			y := i.y
 			z := i.z
@@ -465,7 +454,7 @@ func lightPropBreakBlock(editedBlockChunkCoord chunkPositionLighting, editedBloc
 				airBlocksData: chunks[chunkPos].airBlocksData,
 			}
 		}
-	
+	*/
 }
 
 func fractalNoise(x int32, z int32, amplitude float32, octaves int, lacunarity float32, persistence float32, scale float32) int16 {
