@@ -2,10 +2,10 @@
 
 - [x] Switch to 32 x 32 x 32 chunking
 - [x] Organize codebase (pt1)
-- [-] Fast, Accurate lighting calculations (offload to diff thread) (Partially Done)
-- [ ] Fast, Seamless block editing within and across chunks
+- [-] Fast, Accurate lighting calculations (offload to diff thread) (WIP)
+- [-] Fast, Seamless block editing within and across chunks (Breaking blocks yes, adding blocks WIP)
 - [ ] Infinite horizontal terrain generation
-- [ ] Smooth lighting
+- [ ] Smooth lighting (WIP)
 - [ ] Simple gradient skybox
 - [ ] Organize codebase (pt2)
 - [ ] Directional Blocks (e.g logs)
