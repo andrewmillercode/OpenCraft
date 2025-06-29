@@ -30,7 +30,7 @@ var (
 	firstMouse             bool = true
 	movementSpeed          float32
 	shouldLockMouse        bool = true
-	cameraPosition              = mgl32.Vec3{0.0, 50, 15}
+	cameraPosition              = mgl32.Vec3{0.0, 10, 15}
 	cameraPositionLerped        = cameraPosition
 	cameraFront                 = mgl32.Vec3{0.0, 0.0, -1.0}
 	orientationFront            = mgl32.Vec3{0.0, 0.0, -1.0}

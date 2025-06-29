@@ -1,15 +1,15 @@
 package main
+
 import (
-	"math"
 	"fmt"
+	"math"
+
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl32"
 )
 
-
 var clickDelayAccumulator float32
 var clickDeltaTimeDelay float32 = float32(1.0 / 8.0)
-
 
 func velocityDamping(damping float32) {
 	dampenVert := (1.0 - damping)
@@ -92,13 +92,11 @@ func raycast(action bool) {
 		if action {
 			if chunk, ok := chunks[ChunkPos]; ok {
 				if _, ok := chunk.blocksData[pos]; ok {
-					/*
-					chunk.block[pos] = &airData{lightLevel: 0}
-					delete(chunk.blocksData, pos)
+					if isSolidBlock(chunk.blocksData[pos].blockType) {
+						breakBlock(pos, ChunkPos)
 
-					lightPropBreakBlock(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
-						*/
-					return
+						return
+					}
 				}
 			}
 
@@ -135,12 +133,12 @@ func raycast(action bool) {
 					//place a block if there is no block at the position and it is not colliding with the player
 					if _, ok := chunk.blocksData[pos]; !ok && !isCollidingWithPlayer {
 						/*
-						chunk.blocksData[pos] = blockData{
-							blockType: 0,
-						}
-						delete(chunk.airBlocksData, pos)
+							chunk.blocksData[pos] = blockData{
+								blockType: 0,
+							}
+							delete(chunk.airBlocksData, pos)
 
-						lightPropPlaceBlock(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
+							lightPropPlaceBlock(chunkPositionLighting{ChunkPos.x, ChunkPos.z}, ChunkPos, pos)
 						*/
 						return
 					}
@@ -153,7 +151,6 @@ func raycast(action bool) {
 	}
 
 }
-
 
 func input(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 
@@ -236,7 +233,7 @@ func mouseMoveCallback(window *glfw.Window, xPos, yPos float64) {
 }
 func mouseInputCallback(window *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 
-	if action == glfw.Press && clickDelayAccumulator >= clickDeltaTimeDelay  {
+	if action == glfw.Press && clickDelayAccumulator >= clickDeltaTimeDelay {
 		shouldLockMouse = true
 		clickDelayAccumulator = 0
 		if button == glfw.MouseButtonRight {
@@ -252,7 +249,6 @@ func mouseInputCallback(window *glfw.Window, button glfw.MouseButton, action glf
 // Movement inputs, gets checked each frame for fast responses.
 func movement(window *glfw.Window) {
 
-	
 	movementSpeed = walkingSpeed
 
 	if isFlying {

@@ -23,6 +23,17 @@ func (blockPos blockPosition) isEqual(blockPosCompare blockPosition) bool {
 
 	return false
 }
+func GenerateChunkMeshes(_chunks *map[chunkPosition]chunkData) {
+	for chunkPos, _chunkData := range *_chunks {
+		vao, trisCount := createChunkVAO(_chunkData.blocksData, chunkPos)
+		chunks[chunkPos] = chunkData{
+			blocksData:   _chunkData.blocksData,
+			lightSources: _chunkData.lightSources,
+			vao:          vao,
+			trisCount:    trisCount,
+		}
+	}
+}
 func createChunks() {
 
 	for x := int32(-NumOfChunks); x <= NumOfChunks; x++ {
@@ -41,20 +52,7 @@ func createChunks() {
 	}
 
 	propagateSunLightGlobal()
-
-	for chunkPos, _chunkData := range chunks {
-
-		vao, trisCount := createChunkVAO(_chunkData.blocksData, chunkPos)
-
-		chunks[chunkPos] = chunkData{
-			blocksData:   _chunkData.blocksData,
-			lightSources: _chunkData.lightSources,
-			vao:          vao,
-			trisCount:    trisCount,
-		}
-
-	}
-
+	GenerateChunkMeshes(&chunks)
 }
 
 func chunk(pos chunkPosition) chunkData {
@@ -157,14 +155,13 @@ func getTextureCoords(blockID uint16, faceIndex uint8) []float32 {
 	return []float32{u1, v1, u2, v2}
 
 }
-func BFSLightProp(lightSources []chunkBlockPositions) {
+func BFSLightProp(lightSources []chunkBlockPositions) map[chunkBlockPositions]struct{} {
 	// Use slice-based queue for much better performance than container/list
 	const initialCapacity = 10000
 	queue := make([]chunkBlockPositions, 0, initialCapacity)
 	visited := make(map[chunkBlockPositions]struct{}, initialCapacity)
 	head := 0
 
-	// Add initial light sources to queue and mark as visited
 	for _, source := range lightSources {
 		queue = append(queue, source)
 		visited[source] = struct{}{}
@@ -186,7 +183,7 @@ func BFSLightProp(lightSources []chunkBlockPositions) {
 		lightLevel := lightSources[cur.blockPos]
 
 		// Stop propagating if light is too dim
-		if lightLevel <= 1 {
+		if lightLevel <= 0 {
 			continue
 		}
 
@@ -303,8 +300,8 @@ func BFSLightProp(lightSources []chunkBlockPositions) {
 			neighborPos := blockPosition{x, y + 1, z}
 			neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
 			if _, seen := visited[neighbor]; !seen {
-				if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
-					lightSources[neighborPos] = newLightLevel
+				if currentLight, exists := lightSources[neighborPos]; exists && currentLight < lightLevel {
+					lightSources[neighborPos] = lightLevel
 					queue = append(queue, neighbor)
 					visited[neighbor] = struct{}{}
 				}
@@ -315,8 +312,8 @@ func BFSLightProp(lightSources []chunkBlockPositions) {
 				neighbor := chunkBlockPositions{adjChunk, adjBlock}
 				if _, seen := visited[neighbor]; !seen {
 					adjChunkData := chunks[adjChunk]
-					if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
-						adjChunkData.lightSources[adjBlock] = newLightLevel
+					if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < lightLevel {
+						adjChunkData.lightSources[adjBlock] = lightLevel
 						queue = append(queue, neighbor)
 						visited[neighbor] = struct{}{}
 					}
@@ -329,8 +326,8 @@ func BFSLightProp(lightSources []chunkBlockPositions) {
 			neighborPos := blockPosition{x, y - 1, z}
 			neighbor := chunkBlockPositions{cur.chunkPos, neighborPos}
 			if _, seen := visited[neighbor]; !seen {
-				if currentLight, exists := lightSources[neighborPos]; exists && currentLight < newLightLevel {
-					lightSources[neighborPos] = newLightLevel
+				if currentLight, exists := lightSources[neighborPos]; exists && currentLight < lightLevel {
+					lightSources[neighborPos] = lightLevel
 					queue = append(queue, neighbor)
 					visited[neighbor] = struct{}{}
 				}
@@ -341,8 +338,8 @@ func BFSLightProp(lightSources []chunkBlockPositions) {
 				neighbor := chunkBlockPositions{adjChunk, adjBlock}
 				if _, seen := visited[neighbor]; !seen {
 					adjChunkData := chunks[adjChunk]
-					if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < newLightLevel {
-						adjChunkData.lightSources[adjBlock] = newLightLevel
+					if currentLight, exists := adjChunkData.lightSources[adjBlock]; exists && currentLight < lightLevel {
+						adjChunkData.lightSources[adjBlock] = lightLevel
 						queue = append(queue, neighbor)
 						visited[neighbor] = struct{}{}
 					}
@@ -350,6 +347,7 @@ func BFSLightProp(lightSources []chunkBlockPositions) {
 			}
 		}
 	}
+	return visited
 }
 
 func DFSLightPropWithChunkUpdates(blocks []chunkBlockPositions, chunksAffected map[chunkPosition]struct{}) map[chunkPosition]struct{} {
@@ -935,7 +933,56 @@ func wrapBlockPosition(pos blockPosition) blockPosition {
 	}
 	return pos
 }
+func breakBlock(pos blockPosition, chunkPos chunkPosition) {
+	delete(chunks[chunkPos].blocksData, pos)
+	chunks[chunkPos].lightSources[pos] = 0
+	chunks[chunkPos].blocksData[pos] = blockData{
+		blockType: AirID,
+	}
 
+	// 2. Find the brightest neighboring light source to determine the new block's light level.
+	var newLightLevel uint8 = 0
+	repropagationQueue := []chunkBlockPositions{}
+
+	for i := uint8(0); i < 6; i++ {
+		// Check all 6 faces for adjacent light sources
+		if adjExists, _, adjLightLevel := getAdjBlockFromFace(pos, chunkPos, i, true); adjExists && adjLightLevel > 0 {
+
+			// Sunlight from directly above propagates downwards at full strength.
+			if i == 4 && adjLightLevel == 15 {
+				newLightLevel = 15
+				break
+			}
+			// For other light, it diminishes by 1.
+			if adjLightLevel > newLightLevel {
+				newLightLevel = adjLightLevel - 1
+			}
+		}
+	}
+
+	// 3. Set the new light level and prepare for propagation.
+	if newLightLevel > 0 {
+		chunks[chunkPos].lightSources[pos] = newLightLevel
+		repropagationQueue = append(repropagationQueue, chunkBlockPositions{chunkPos, pos})
+	}
+
+	// 4. Propagate the new light outwards from this block.
+	var visitedArea map[chunkBlockPositions]struct{} = make(map[chunkBlockPositions]struct{})
+	if len(repropagationQueue) > 0 {
+		visitedArea = BFSLightProp(repropagationQueue)
+	}
+	// Update affected chunks
+	chunksToUpdate := make(map[chunkPosition]chunkData)
+	for visited := range visitedArea {
+		chunksToUpdate[visited.chunkPos] = chunks[visited.chunkPos]
+	}
+	_, borderingChunks := ReturnBorderingChunks(pos, chunkPos)
+	for _, chunk := range borderingChunks {
+		chunksToUpdate[chunk] = chunks[chunk]
+	}
+	chunksToUpdate[chunkPos] = chunks[chunkPos]
+	GenerateChunkMeshes(&chunksToUpdate)
+}
 func ReturnBorderingChunks(pos blockPosition, chunkPos chunkPosition) (bool, []chunkPosition) {
 
 	var borderingChunks []chunkPosition
