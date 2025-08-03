@@ -5,6 +5,7 @@ layout(location = 1) in vec2 texCoord;
 layout(location = 2) in float lightLevel;
 layout(location = 3) in vec3 textureTint;
 layout(location = 4) in vec2 overlayCoord;
+
 out vec2 TexCoord;
 out vec2 OverlayCoord;
 out float LightLevel;

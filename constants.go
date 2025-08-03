@@ -11,6 +11,24 @@ const (
 	chunkSize      uint8   = 31 // 32x32x32 size chunks, 31 is the max directional index for a block in a chunk
 )
 
+type faceMapStruct struct {
+	FRONT uint8
+	BACK  uint8
+	RIGHT uint8
+	LEFT  uint8
+	UP    uint8
+	DOWN  uint8
+}
+
+var FACE_MAP = faceMapStruct{
+	FRONT: 0,
+	BACK:  1,
+	RIGHT: 2,
+	LEFT:  3,
+	UP:    4,
+	DOWN:  5,
+}
+
 const (
 	AirID   uint16 = 0
 	DirtID  uint16 = 1

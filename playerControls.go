@@ -92,7 +92,7 @@ func raycast(action bool) {
 		if action {
 			if chunk, ok := chunks[ChunkPos]; ok {
 				if _, ok := chunk.blocksData[pos]; ok {
-					if isSolidBlock(chunk.blocksData[pos].blockType) {
+					if chunk.blocksData[pos].isSolid() {
 						breakBlock(pos, ChunkPos)
 
 						return
@@ -128,13 +128,13 @@ func raycast(action bool) {
 			tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*32))), uint8(math.Floor(float64(hitPoint[1]) - float64(tempChunkPos.y*32))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*32)))}
 			if chunk, ok := chunks[tempChunkPos]; ok {
 				if block, ok := chunk.blocksData[tempPos]; ok {
-					if isSolidBlock(block.blockType) {
+					if block.isSolid() {
 
 						isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
 						//place a block if there is no block at the position and it is not colliding with the player
 
 						if _, ok := chunk.blocksData[pos]; ok {
-							if !isSolidBlock(chunk.blocksData[pos].blockType) && !isCollidingWithPlayer {
+							if !chunk.blocksData[pos].isSolid() && !isCollidingWithPlayer {
 								placeBlock(pos, ChunkPos, DirtID)
 
 								return

@@ -30,7 +30,7 @@ func collisions() {
 
 									relativeBlockPosition := blockPosition{uint8(blockX - (currentPlayerChunkPos.x * 32)), uint8(blockY - int32(currentPlayerChunkPos.y*32)), uint8(blockZ - (currentPlayerChunkPos.z * 32))}
 
-									if block, exists := chunk.blocksData[relativeBlockPosition]; exists && isSolidBlock(block.blockType) {
+									if block, exists := chunk.blocksData[relativeBlockPosition]; exists && block.isSolid() {
 
 										floatBlockPos := mgl32.Vec3{float32(relativeBlockPosition.x), float32(relativeBlockPosition.y), float32(relativeBlockPosition.z)}
 										absoluteBlockPosition := mgl32.Vec3{float32(currentPlayerChunkPos.x*32) + floatBlockPos.X(), float32(currentPlayerChunkPos.y*32) + floatBlockPos.Y(), float32(currentPlayerChunkPos.z*32) + floatBlockPos.Z()}

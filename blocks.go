@@ -23,6 +23,7 @@ func (blockPos blockPosition) isEqual(blockPosCompare blockPosition) bool {
 
 	return false
 }
+
 func GenerateChunkMeshes(_chunks *map[chunkPosition]chunkData) {
 	for chunkPos, _chunkData := range *_chunks {
 		vao, trisCount := createChunkVAO(_chunkData.blocksData, chunkPos)
@@ -34,6 +35,7 @@ func GenerateChunkMeshes(_chunks *map[chunkPosition]chunkData) {
 		}
 	}
 }
+
 func createChunks() {
 
 	for x := int32(-NumOfChunks); x <= NumOfChunks; x++ {
@@ -163,49 +165,51 @@ func BFSLightProp(lightSources []chunkBlockPositions, inversePropagation bool) m
 	head := 0
 
 	if inversePropagation {
-		// Inverse propagation: remove light
-		for _, source := range lightSources {
-			queue = append(queue, source)
-			visited[source] = struct{}{}
-		}
-
-		// Process removal queue
-		for head < len(queue) {
-			cur := queue[head]
-			head++
-
-			currentChunk, ok := chunks[cur.chunkPos]
-			if !ok {
-				continue
+		/*
+			// Inverse propagation: remove light
+			for _, source := range lightSources {
+				queue = append(queue, source)
+				visited[source] = struct{}{}
 			}
 
-			lightLevel := currentChunk.lightSources[cur.blockPos]
+			// Process removal queue
+			for head < len(queue) {
+				cur := queue[head]
+				head++
 
-			// Remove light at this position
-			delete(currentChunk.lightSources, cur.blockPos)
+				currentChunk, ok := chunks[cur.chunkPos]
+				if !ok {
+					continue
+				}
 
-			// Check all 6 neighbors
-			for i := uint8(0); i < 6; i++ {
-				if adjExists, _, adjChunk, adjBlock, adjLightLevel := getAdjBlockFromFace(cur.blockPos, cur.chunkPos, i, true); adjExists {
-					neighbor := chunkBlockPositions{adjChunk, adjBlock}
-					if _, seen := visited[neighbor]; !seen && adjLightLevel > 0 {
-						// For sunlight (level 15), remove all light below it
-						if lightLevel == 15 && i == 5 { // Down face and sunlight
-							queue = append(queue, neighbor)
-							visited[neighbor] = struct{}{}
-						} else if adjLightLevel < lightLevel { // Normal light removal
-							queue = append(queue, neighbor)
-							visited[neighbor] = struct{}{}
-						} else if adjLightLevel == lightLevel-1 { // Light that came from this source
-							queue = append(queue, neighbor)
-							visited[neighbor] = struct{}{}
+				lightLevel := currentChunk.lightSources[cur.blockPos]
+
+				// Remove light at this position
+				delete(currentChunk.lightSources, cur.blockPos)
+
+				// Check all 6 neighbors
+				for i := uint8(0); i < 6; i++ {
+					if adjBlockData := getAdjBlockFromFace(cur.blockPos, cur.chunkPos, i); adjBlockData.blockExists {
+						neighbor := chunkBlockPositions{adjChunk, adjBlock}
+						if _, seen := visited[neighbor]; !seen && adjLightLevel > 0 {
+							// For sunlight (level 15), remove all light below it
+							if lightLevel == 15 && i == 5 { // Down face and sunlight
+								queue = append(queue, neighbor)
+								visited[neighbor] = struct{}{}
+							} else if ad < lightLevel { // Normal light removal
+								queue = append(queue, neighbor)
+								visited[neighbor] = struct{}{}
+							} else if adjLightLevel == lightLevel-1 { // Light that came from this source
+								queue = append(queue, neighbor)
+								visited[neighbor] = struct{}{}
+							}
 						}
 					}
 				}
 			}
-		}
+		*/
 	} else {
-		// Normal propagation (your existing code)
+
 		for _, source := range lightSources {
 			queue = append(queue, source)
 			visited[source] = struct{}{}
@@ -505,44 +509,50 @@ func fractalNoise3D(x int32, y int32, z int32, amplitude float32, scale float32)
 
 }
 
-// face = 0(front) 1(back) 2(right) 3(left) 4(up) 5(down)
-// return type: exists, blockData, fromAdjChunk
-func getAdjBlockFromFace(key blockPosition, chunkPos chunkPosition, face uint8, lightSource bool) (bool, blockData, chunkPosition, blockPosition, uint8) {
+type adjBjockResult struct {
+	blockExists bool
+	blockData   blockData
+	chunkPos    chunkPosition
+	blockPos    blockPosition
+}
+
+func getAdjBlockFromFace(key blockPosition, chunkPos chunkPosition, face uint8) adjBjockResult {
+
 	var adjChunk chunkPosition
 	var adjBlock blockPosition
 
 	switch face {
-	case 0: // Front
+	case FACE_MAP.FRONT:
 		if key.z == chunkSize {
 			adjChunk, adjBlock = chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z + 1}, blockPosition{key.x, key.y, 0}
 		} else {
 			adjChunk, adjBlock = chunkPos, blockPosition{key.x, key.y, key.z + 1}
 		}
-	case 1: // Back
+	case FACE_MAP.BACK:
 		if key.z == 0 {
 			adjChunk, adjBlock = chunkPosition{chunkPos.x, chunkPos.y, chunkPos.z - 1}, blockPosition{key.x, key.y, chunkSize}
 		} else {
 			adjChunk, adjBlock = chunkPos, blockPosition{key.x, key.y, key.z - 1}
 		}
-	case 2: // Right
+	case FACE_MAP.RIGHT:
 		if key.x == chunkSize {
 			adjChunk, adjBlock = chunkPosition{chunkPos.x + 1, chunkPos.y, chunkPos.z}, blockPosition{0, key.y, key.z}
 		} else {
 			adjChunk, adjBlock = chunkPos, blockPosition{key.x + 1, key.y, key.z}
 		}
-	case 3: // Left
+	case FACE_MAP.LEFT:
 		if key.x == 0 {
 			adjChunk, adjBlock = chunkPosition{chunkPos.x - 1, chunkPos.y, chunkPos.z}, blockPosition{chunkSize, key.y, key.z}
 		} else {
 			adjChunk, adjBlock = chunkPos, blockPosition{key.x - 1, key.y, key.z}
 		}
-	case 4: // Up
+	case FACE_MAP.UP:
 		if key.y == chunkSize {
 			adjChunk, adjBlock = chunkPosition{chunkPos.x, chunkPos.y + 1, chunkPos.z}, blockPosition{key.x, 0, key.z}
 		} else {
 			adjChunk, adjBlock = chunkPos, blockPosition{key.x, key.y + 1, key.z}
 		}
-	case 5: // Down
+	case FACE_MAP.DOWN:
 		if key.y == 0 {
 			adjChunk, adjBlock = chunkPosition{chunkPos.x, chunkPos.y - 1, chunkPos.z}, blockPosition{key.x, chunkSize, key.z}
 		} else {
@@ -551,52 +561,39 @@ func getAdjBlockFromFace(key blockPosition, chunkPos chunkPosition, face uint8, 
 	}
 
 	if chunk, ok := chunks[adjChunk]; ok {
-		if lightSource {
-			if _lightLevel, ok := chunk.lightSources[adjBlock]; ok {
-				return true, blockData{}, adjChunk, adjBlock, _lightLevel
-			}
-		}
 		if _blockData, ok := chunk.blocksData[adjBlock]; ok {
-			return true, _blockData, adjChunk, adjBlock, 0
+			return adjBjockResult{blockExists: true, blockData: _blockData, chunkPos: adjChunk, blockPos: adjBlock}
+
 		}
 	}
-	return false, blockData{}, chunkPosition{}, blockPosition{}, 0
-}
-func isSolidBlock(blockType uint16) bool {
-	switch blockType {
-	case AirID:
-		return false
-	default:
-		return true
-	}
+	return adjBjockResult{blockExists: false, blockData: blockData{}, chunkPos: chunkPosition{}, blockPos: blockPosition{}}
 }
 
 var grassTint = mgl32.Vec3{0.486, 0.741, 0.419}
 var noTint = mgl32.Vec3{1.0, 1.0, 1.0}
 
 func GenerateBlockFace(key blockPosition, chunkPos chunkPosition, faceIndex uint8, vertexOffset int, verts *[]float32, i int, self blockData, y, z, x float32, curTint mgl32.Vec3, u, v uint8, useTextureOverlay bool) int {
-	adjExists, adjBlock, _, _, _ := getAdjBlockFromFace(key, chunkPos, faceIndex, false)
-	_, _, _, _, adjLightlevel := getAdjBlockFromFace(key, chunkPos, faceIndex, true)
-	isAdjSolid := isSolidBlock(adjBlock.blockType)
+	adjBlock := getAdjBlockFromFace(key, chunkPos, faceIndex)
 
-	if adjExists && isAdjSolid {
+	if adjBlock.blockExists && adjBlock.blockData.isSolid() {
 		i = (vertexOffset * 18) - 3
 		return i
 	}
 
-	var lightLevel = float32(adjLightlevel)
+	var lightLevel = float32(max(adjBlock.blockData.blockLight, adjBlock.blockData.sunLight))
+
 	textureUV := getTextureCoords(self.blockType, faceIndex)
 	lightLevelMultiplier := float32(1.0)
-	if faceIndex == 5 {
+	if faceIndex == FACE_MAP.DOWN {
 		lightLevelMultiplier = 0.5 // Bottom face has least light
 	}
-	if faceIndex == 4 {
+	if faceIndex == FACE_MAP.UP {
 		lightLevelMultiplier = 0.8 // Top face has slightly less light
 	}
-	if faceIndex == 0 || faceIndex == 1 {
+	if faceIndex == FACE_MAP.FRONT || faceIndex == FACE_MAP.BACK {
 		lightLevelMultiplier = 0.7 // Front and Back faces
 	}
-	if faceIndex == 2 || faceIndex == 3 {
+	if faceIndex == FACE_MAP.RIGHT || faceIndex == FACE_MAP.LEFT {
 		lightLevelMultiplier = 0.6 // Left and Right faces
 	}
 	if useTextureOverlay {
@@ -615,28 +612,47 @@ func createChunkVAO(_chunkData map[blockPosition]blockData, chunkPos chunkPositi
 
 	for key, self := range _chunkData {
 
-		if self.blockType == AirID {
+		if self.isSolid() == false {
 			continue
 		}
+
 		curTint := noTint
 		if self.blockType == GrassID {
 			curTint = grassTint
 		}
-		topBlock, topExists := _chunkData[blockPosition{key.x, key.y + 1, key.z}]
-		top := topExists && isSolidBlock(topBlock.blockType)
-		botBlock, botExists := _chunkData[blockPosition{key.x, key.y - 1, key.z}]
-		bot := botExists && isSolidBlock(botBlock.blockType)
-		lBlock, lExists := _chunkData[blockPosition{key.x - 1, key.y, key.z}]
-		l := lExists && isSolidBlock(lBlock.blockType)
-		rBlock, rExists := _chunkData[blockPosition{key.x + 1, key.y, key.z}]
-		r := rExists && isSolidBlock(rBlock.blockType)
-		bBlock, bExists := _chunkData[blockPosition{key.x, key.y, key.z - 1}]
-		b := bExists && isSolidBlock(bBlock.blockType)
-		fBlock, fExists := _chunkData[blockPosition{key.x, key.y, key.z + 1}]
-		f := fExists && isSolidBlock(fBlock.blockType)
+
+		topBlock, topOk := _chunkData[blockPosition{key.x, key.y + 1, key.z}]
+		if topOk && !topBlock.isSolid() {
+			topOk = false
+		}
+
+		bottomBlock, bottomOk := _chunkData[blockPosition{key.x, key.y - 1, key.z}]
+		if bottomOk && !bottomBlock.isSolid() {
+			bottomOk = false
+		}
+
+		leftBlock, leftOk := _chunkData[blockPosition{key.x - 1, key.y, key.z}]
+		if leftOk && !leftBlock.isSolid() {
+			leftOk = false
+		}
+
+		rightBlock, rightOk := _chunkData[blockPosition{key.x + 1, key.y, key.z}]
+		if rightOk && !rightBlock.isSolid() {
+			rightOk = false
+		}
+
+		backBlock, backOk := _chunkData[blockPosition{key.x, key.y, key.z - 1}]
+		if backOk && !backBlock.isSolid() {
+			backOk = false
+		}
+
+		frontBlock, frontOk := _chunkData[blockPosition{key.x, key.y, key.z + 1}]
+		if frontOk && !frontBlock.isSolid() {
+			frontOk = false
+		}
 
 		//block touching blocks on each side, won't be visible
-		if top && bot && l && r && b && f {
+		if topOk && bottomOk && leftOk && rightOk && backOk && frontOk {
 			continue
 		}
 
@@ -651,7 +667,7 @@ func createChunkVAO(_chunkData map[blockPosition]blockData, chunkPos chunkPositi
 			//FRONT FACE
 			if i >= 0 && i <= 15 {
 
-				if !f {
+				if !frontOk {
 					var faceIndex uint8 = uint8(0)
 					var vertexOffset = 1
 					i = GenerateBlockFace(key, chunkPos, faceIndex, vertexOffset, &verts, i, self, y, z, x, curTint, u, v, true)
@@ -662,7 +678,7 @@ func createChunkVAO(_chunkData map[blockPosition]blockData, chunkPos chunkPositi
 			//BACK FACE
 			if i >= (1*18) && i <= (1*18)+15 {
 
-				if !b {
+				if !backOk {
 					var faceIndex uint8 = uint8(1)
 					var vertexOffset = 2
 					i = GenerateBlockFace(key, chunkPos, faceIndex, vertexOffset, &verts, i, self, y, z, x, curTint, u, v, true)
@@ -671,7 +687,7 @@ func createChunkVAO(_chunkData map[blockPosition]blockData, chunkPos chunkPositi
 			}
 			//LEFT FACE
 			if i >= (2*18) && i <= (2*18)+15 {
-				if !l {
+				if !leftOk {
 					var faceIndex uint8 = uint8(3)
 					var vertexOffset = 3
 					i = GenerateBlockFace(key, chunkPos, faceIndex, vertexOffset, &verts, i, self, y, z, x, curTint, u, v, true)
@@ -682,7 +698,7 @@ func createChunkVAO(_chunkData map[blockPosition]blockData, chunkPos chunkPositi
 			//RIGHT FACE
 			if i >= (3*18) && i <= (3*18)+15 {
 
-				if !r {
+				if !rightOk {
 					var faceIndex uint8 = uint8(2)
 					var vertexOffset = 4
 					i = GenerateBlockFace(key, chunkPos, faceIndex, vertexOffset, &verts, i, self, y, z, x, curTint, u, v, true)
@@ -692,7 +708,7 @@ func createChunkVAO(_chunkData map[blockPosition]blockData, chunkPos chunkPositi
 			}
 			//TOP FACE
 			if i >= (4*18) && i <= (4*18)+15 {
-				if !top {
+				if !topOk {
 					var faceIndex uint8 = uint8(4)
 					var vertexOffset = 5
 					i = GenerateBlockFace(key, chunkPos, faceIndex, vertexOffset, &verts, i, self, y, z, x, curTint, u, v, false)
@@ -702,7 +718,7 @@ func createChunkVAO(_chunkData map[blockPosition]blockData, chunkPos chunkPositi
 			}
 			//BOTTOM FACE
 			if i >= (5*18) && i <= (5*18)+15 {
-				if !bot {
+				if !bottomOk {
 
 					curTint = noTint
 					var faceIndex uint8 = uint8(5)
@@ -790,16 +806,17 @@ func breakBlock(pos blockPosition, chunkPos chunkPosition) {
 
 	for i := uint8(0); i < 6; i++ {
 		// Check all 6 faces for adjacent light sources
-		if adjExists, _, _, _, adjLightLevel := getAdjBlockFromFace(pos, chunkPos, i, true); adjExists && adjLightLevel > 0 {
+		adjBlock := getAdjBlockFromFace(pos, chunkPos, i)
+		if adjBlock.blockExists && (adjBlock.blockData.blockLight > 0 || adjBlock.blockData.sunLight > 0) {
 
 			// Sunlight from directly above propagates downwards at full strength.
-			if i == 4 && adjLightLevel == 15 {
+			if i == 4 && adjBlock.blockData.sunLight == 15 {
 				newLightLevel = 15
 				break
 			}
 			// For other light, it diminishes by 1.
-			if adjLightLevel > newLightLevel {
-				newLightLevel = adjLightLevel - 1
+			if adjBlock.blockData.sunLight > newLightLevel {
+				newLightLevel = adjBlock.blockData.sunLight - 1
 			}
 		}
 	}
@@ -827,6 +844,7 @@ func breakBlock(pos blockPosition, chunkPos chunkPosition) {
 	chunksToUpdate[chunkPos] = chunks[chunkPos]
 	GenerateChunkMeshes(&chunksToUpdate)
 }
+
 func placeBlock(pos blockPosition, chunkPos chunkPosition, blockType uint16) {
 	chunksToUpdate := make(map[chunkPosition]chunkData)
 
@@ -849,7 +867,6 @@ func placeBlock(pos blockPosition, chunkPos chunkPosition, blockType uint16) {
 
 	chunksToUpdate[chunkPos] = chunks[chunkPos]
 	GenerateChunkMeshes(&chunksToUpdate)
-	return
 
 }
 
