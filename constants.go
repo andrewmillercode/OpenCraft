@@ -1,14 +1,14 @@
 package main
 
 const (
-	seed           int64   = 1
-	tickUpdateRate float32 = float32(1.0 / 30.0) //tick rate (30 TPS) ticks per second
-	runningSpeed   float32 = 1.3
-	flyingSpeed    float32 = 5
-	walkingSpeed   float32 = 2.3
-	jumpHeight     float32 = 0.25
-	playerWidth    float32 = 0.9
-	chunkSize      uint8   = 31 // 32x32x32 size chunks, 31 is the max directional index for a block in a chunk
+	SEED             int64   = 1
+	TICK_UPDATE_RATE float32 = float32(1.0 / 30.0) //tick rate (30 TPS) ticks per second
+	RUNNING_SPEED    float32 = 1.3
+	FLYING_SPEED     float32 = 5
+	WALKING_SPEED    float32 = 2.3
+	JUMP_HEIGHT      float32 = 0.25
+	PLAYER_WIDTH     float32 = 0.9
+	CHUNK_SIZE       uint8   = 16 // 16^3 block sized chunks
 )
 
 type faceMapStruct struct {
@@ -23,8 +23,8 @@ type faceMapStruct struct {
 var FACE_MAP = faceMapStruct{
 	FRONT: 0,
 	BACK:  1,
-	RIGHT: 2,
-	LEFT:  3,
+	LEFT:  2,
+	RIGHT: 3,
 	UP:    4,
 	DOWN:  5,
 }

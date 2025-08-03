@@ -21,8 +21,8 @@ import (
 // Import for side effects
 
 var (
-	noise                          = opensimplex.New32(seed)
-	random                         = rand.New(rand.NewSource(seed))
+	noise                          = opensimplex.New32(SEED)
+	random                         = rand.New(rand.NewSource(SEED))
 	yaw                    float64 = -90.0
 	pitch                  float64 = 0.0
 	lastX                  float64
@@ -234,7 +234,7 @@ func main() {
 
 		movement(window)
 
-		for tickAccumulator >= tickUpdateRate {
+		for tickAccumulator >= TICK_UPDATE_RATE {
 			previousCameraPosition = cameraPosition
 			velocityDamping(0.35)
 
@@ -256,9 +256,9 @@ func main() {
 			}
 
 			cameraPosition = cameraPosition.Add(velocity)
-			tickAccumulator -= tickUpdateRate
+			tickAccumulator -= TICK_UPDATE_RATE
 		}
-		lerpVal := tickAccumulator / tickUpdateRate
+		lerpVal := tickAccumulator / TICK_UPDATE_RATE
 		if lerpVal < 0 {
 			lerpVal = 0
 		}
@@ -281,7 +281,7 @@ func main() {
 
 			if chunkData.trisCount > 0 {
 				//render the chunk
-				modelPos := mgl32.Translate3D(float32(chunkPos.x*32), float32(chunkPos.y*32), float32(chunkPos.z*32))
+				modelPos := mgl32.Translate3D(float32(chunkPos.x*int32(CHUNK_SIZE)), float32(chunkPos.y*int32(CHUNK_SIZE)), float32(chunkPos.z*int32(CHUNK_SIZE)))
 				modelMemLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
 				gl.UniformMatrix4fv(modelMemLoc, 1, false, &modelPos[0])
 				gl.BindVertexArray(chunkData.vao)

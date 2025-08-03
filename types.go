@@ -42,8 +42,8 @@ func (block blockData) isSolid() bool {
 }
 
 type chunkData struct {
-	blocksData   map[blockPosition]blockData
-	lightSources map[blockPosition]uint8
+	blocksData   [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]*blockData
+	lightSources []blockPosition
 	vao          uint32
 	trisCount    int32
 }

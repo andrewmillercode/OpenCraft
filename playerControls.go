@@ -91,13 +91,12 @@ func raycast(action bool) {
 		}
 		if action {
 			if chunk, ok := chunks[ChunkPos]; ok {
-				if _, ok := chunk.blocksData[pos]; ok {
-					if chunk.blocksData[pos].isSolid() {
-						breakBlock(pos, ChunkPos)
 
-						return
-					}
+				if chunk.blocksData[pos.x][pos.y][pos.z].isSolid() {
+					breakBlock(pos, ChunkPos)
+					return
 				}
+
 			}
 
 		}
@@ -127,20 +126,17 @@ func raycast(action bool) {
 			}
 			tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*32))), uint8(math.Floor(float64(hitPoint[1]) - float64(tempChunkPos.y*32))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*32)))}
 			if chunk, ok := chunks[tempChunkPos]; ok {
-				if block, ok := chunk.blocksData[tempPos]; ok {
-					if block.isSolid() {
+				if block := chunk.blocksData[tempPos.x][tempPos.y][tempPos.z]; block.isSolid() {
 
-						isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
-						//place a block if there is no block at the position and it is not colliding with the player
+					isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
+					//place a block if there is no block at the position and it is not colliding with the player
 
-						if _, ok := chunk.blocksData[pos]; ok {
-							if !chunk.blocksData[pos].isSolid() && !isCollidingWithPlayer {
-								placeBlock(pos, ChunkPos, DirtID)
+					if !chunk.blocksData[pos.x][pos.y][pos.z].isSolid() && !isCollidingWithPlayer {
+						placeBlock(pos, ChunkPos, DirtID)
 
-								return
-							}
-						}
+						return
 					}
+
 				}
 			}
 
@@ -247,10 +243,10 @@ func mouseInputCallback(window *glfw.Window, button glfw.MouseButton, action glf
 // Movement inputs, gets checked each frame for fast responses.
 func movement(window *glfw.Window) {
 
-	movementSpeed = walkingSpeed
+	movementSpeed = WALKING_SPEED
 
 	if isFlying {
-		movementSpeed = flyingSpeed
+		movementSpeed = FLYING_SPEED
 		if window.GetKey(glfw.KeySpace) == glfw.Press {
 			velocity[1] += movementSpeed * deltaTime
 		}
@@ -260,7 +256,7 @@ func movement(window *glfw.Window) {
 	}
 
 	if window.GetKey(glfw.KeyLeftShift) == glfw.Press {
-		movementSpeed *= runningSpeed
+		movementSpeed *= RUNNING_SPEED
 		isSprinting = true
 	}
 
@@ -289,7 +285,7 @@ func movement(window *glfw.Window) {
 			return
 		}
 		jumpCooldown = 0.05
-		velocity[1] += jumpHeight
+		velocity[1] += JUMP_HEIGHT
 
 	}
 }

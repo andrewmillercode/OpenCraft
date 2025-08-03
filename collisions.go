@@ -10,8 +10,8 @@ func collisions() {
 	isOnGround = false
 
 	playerBox := AABB(
-		cameraPosition.Sub(mgl32.Vec3{playerWidth / 2, 1.5, playerWidth / 2}),
-		cameraPosition.Add(mgl32.Vec3{playerWidth / 2, 0.25, playerWidth / 2}),
+		cameraPosition.Sub(mgl32.Vec3{PLAYER_WIDTH / 2, 1.5, PLAYER_WIDTH / 2}),
+		cameraPosition.Add(mgl32.Vec3{PLAYER_WIDTH / 2, 0.25, PLAYER_WIDTH / 2}),
 	)
 
 	pIntX, pIntY, pIntZ := int32(cameraPosition[0]), int32(cameraPosition[1]), int32(cameraPosition[2])
@@ -22,18 +22,22 @@ func collisions() {
 				currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/32))) + int32(x), int32(math.Floor(float64(cameraPosition[1]/32))) + int32(y), int32(math.Floor(float64(cameraPosition[2]/32))) + int32(z)}
 
 				if chunk, ok := chunks[currentPlayerChunkPos]; ok {
-					for i := 0; i < 3; i++ {
+					for range 3 {
 						var colliders []collider
 						for blockX := pIntX - 3; blockX < pIntX+3; blockX++ {
 							for blockZ := pIntZ - 3; blockZ < pIntZ+3; blockZ++ {
 								for blockY := pIntY - 3; blockY < pIntY+3; blockY++ {
 
-									relativeBlockPosition := blockPosition{uint8(blockX - (currentPlayerChunkPos.x * 32)), uint8(blockY - int32(currentPlayerChunkPos.y*32)), uint8(blockZ - (currentPlayerChunkPos.z * 32))}
-
-									if block, exists := chunk.blocksData[relativeBlockPosition]; exists && block.isSolid() {
+									relativeBlockPosition := blockPosition{uint8(blockX - (currentPlayerChunkPos.x * int32(CHUNK_SIZE))), uint8(blockY - int32(currentPlayerChunkPos.y*int32(CHUNK_SIZE))), uint8(blockZ - (currentPlayerChunkPos.z * int32(CHUNK_SIZE)))}
+									if relativeBlockPosition.x >= CHUNK_SIZE ||
+										relativeBlockPosition.y >= CHUNK_SIZE ||
+										relativeBlockPosition.z >= CHUNK_SIZE {
+										continue // Skip out-of-bounds blocks
+									}
+									if block := chunk.blocksData[relativeBlockPosition.x][relativeBlockPosition.y][relativeBlockPosition.z]; block.isSolid() {
 
 										floatBlockPos := mgl32.Vec3{float32(relativeBlockPosition.x), float32(relativeBlockPosition.y), float32(relativeBlockPosition.z)}
-										absoluteBlockPosition := mgl32.Vec3{float32(currentPlayerChunkPos.x*32) + floatBlockPos.X(), float32(currentPlayerChunkPos.y*32) + floatBlockPos.Y(), float32(currentPlayerChunkPos.z*32) + floatBlockPos.Z()}
+										absoluteBlockPosition := mgl32.Vec3{float32(currentPlayerChunkPos.x*int32(CHUNK_SIZE)) + floatBlockPos.X(), float32(currentPlayerChunkPos.y*int32(CHUNK_SIZE)) + floatBlockPos.Y(), float32(currentPlayerChunkPos.z*int32(CHUNK_SIZE)) + floatBlockPos.Z()}
 
 										blockAABB := AABB(
 											absoluteBlockPosition.Sub(mgl32.Vec3{0.5, 0.5, 0.5}),
@@ -123,8 +127,8 @@ func frac1(x float32) float32 {
 
 func IsCollidingWithPlacedBlock(absBlockPos mgl32.Vec3) bool {
 	playerBox := AABB(
-		cameraPosition.Sub(mgl32.Vec3{playerWidth / 2, 1.5, playerWidth / 2}),
-		cameraPosition.Add(mgl32.Vec3{playerWidth / 2, 0.25, playerWidth / 2}),
+		cameraPosition.Sub(mgl32.Vec3{PLAYER_WIDTH / 2, 1.5, PLAYER_WIDTH / 2}),
+		cameraPosition.Add(mgl32.Vec3{PLAYER_WIDTH / 2, 0.25, PLAYER_WIDTH / 2}),
 	)
 	blockAABB := AABB(
 		absBlockPos.Sub(mgl32.Vec3{0.5, 0.5, 0.5}),
