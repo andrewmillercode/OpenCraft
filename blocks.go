@@ -471,36 +471,15 @@ func getAdjBlockFromFace(key blockPosition, chunkPos chunkPosition, face uint8) 
 var grassTint = mgl32.Vec3{0.486, 0.741, 0.419}
 var noTint = mgl32.Vec3{1.0, 1.0, 1.0}
 
-func GenerateBlockFace(key blockPosition, chunkPos chunkPosition, faceIndex uint8, verts *[]float32, self blockData, y, z, x float32, curTint mgl32.Vec3, u, v uint8, useTextureOverlay bool) {
-	adjBlock := getAdjBlockFromFace(key, chunkPos, faceIndex)
-
-	if adjBlock.blockExists && adjBlock.blockData.isSolid() {
-		//return
-	}
-
-	var lightLevel = float32(max(adjBlock.blockData.blockLight, adjBlock.blockData.sunLight))
-
+func GenerateBlockFace(key blockPosition, chunkPos chunkPosition, faceIndex uint8, verts *[]float32, self blockData, y, z, x float32, curTint mgl32.Vec3, u, v uint8, vertexLight float32, useTextureOverlay bool) {
 	textureUV := getTextureCoords(self.blockType, faceIndex)
-	lightLevelMultiplier := float32(1.0)
-	if faceIndex == FACE_MAP.DOWN {
-		lightLevelMultiplier = 0.5 // Bottom face has least light
-	}
-	if faceIndex == FACE_MAP.UP {
-		lightLevelMultiplier = 0.8 // Top face has slightly less light
-	}
-	if faceIndex == FACE_MAP.FRONT || faceIndex == FACE_MAP.BACK {
-		lightLevelMultiplier = 0.7 // Front and Back faces
-	}
-	if faceIndex == FACE_MAP.RIGHT || faceIndex == FACE_MAP.LEFT {
-		lightLevelMultiplier = 0.6 // Left and Right faces
-	}
 
 	if useTextureOverlay {
 		textureUVOverlay := getTextureCoords(self.blockType, faceIndex)
-		*verts = append(*verts, x, y, z, textureUV[u], textureUV[v], lightLevel*lightLevelMultiplier, curTint[0], curTint[1], curTint[2], textureUVOverlay[u], textureUVOverlay[v])
+		*verts = append(*verts, x, y, z, textureUV[u], textureUV[v], vertexLight, curTint[0], curTint[1], curTint[2], textureUVOverlay[u], textureUVOverlay[v])
 
 	} else {
-		*verts = append(*verts, x, y, z, textureUV[u], textureUV[v], lightLevel*lightLevelMultiplier, curTint[0], curTint[1], curTint[2], 0, 0)
+		*verts = append(*verts, x, y, z, textureUV[u], textureUV[v], vertexLight, curTint[0], curTint[1], curTint[2], 0, 0)
 	}
 }
 
@@ -557,7 +536,114 @@ func createChunkVAO(_chunkData *chunkData, chunkPos chunkPosition) (uint32, int3
 					face := uint8(i / FACE_SIZE)
 
 					if shouldRender[face] {
-						GenerateBlockFace(key, chunkPos, face, &verts, *self, y, z, x, curTint, u, v, true)
+						// Determine signs from relative vertex position
+						var sx int8 = -1
+						if CubeVertices[i] > 0 {
+							sx = 1
+						}
+						var sy int8 = -1
+						if CubeVertices[i+1] > 0 {
+							sy = 1
+						}
+						var sz int8 = -1
+						if CubeVertices[i+2] > 0 {
+							sz = 1
+						}
+						// Normal and in-plane axes for the current face
+						var nx, ny, nz int8 = 0, 0, 0
+						var a1x, a1y, a1z int8 = 0, 0, 0
+						var a2x, a2y, a2z int8 = 0, 0, 0
+						switch face {
+						case FACE_MAP.FRONT:
+							nz = 1
+							a1x = sx
+							a2y = sy
+						case FACE_MAP.BACK:
+							nz = -1
+							a1x = sx
+							a2y = sy
+						case FACE_MAP.LEFT:
+							nx = -1
+							a1z = sz
+							a2y = sy
+						case FACE_MAP.RIGHT:
+							nx = 1
+							a1z = sz
+							a2y = sy
+						case FACE_MAP.UP:
+							ny = 1
+							a1x = sx
+							a2z = sz
+						case FACE_MAP.DOWN:
+							ny = -1
+							a1x = sx
+							a2z = sz
+						}
+						// AO factor based on occluders
+						aoMul := float32(1.0)
+						if AmbientOcclusion {
+							getSolid := func(dx, dy, dz int8) bool {
+								nChunk, nBlock := calculateCrossChunkNeighbor(chunkPos, key.x, key.y, key.z, Vec3Int8{dx, dy, dz})
+								if ch, ok := chunks[nChunk]; ok {
+									return ch.blocksData[nBlock.x][nBlock.y][nBlock.z].isSolid()
+								}
+								return false
+							}
+							side1 := getSolid(nx+a1x, ny+a1y, nz+a1z)
+							side2 := getSolid(nx+a2x, ny+a2y, nz+a2z)
+							corner := getSolid(nx+a1x+a2x, ny+a1y+a2y, nz+a1z+a2z)
+							aoLevel := 0
+							if side1 && side2 {
+								aoLevel = 3
+							} else {
+								if side1 {
+									aoLevel++
+								}
+								if side2 {
+									aoLevel++
+								}
+								if corner {
+									aoLevel++
+								}
+							}
+							aoTable := [...]float32{1.0, 1.0, 1.0, 1.0}
+							aoMul = aoTable[aoLevel]
+						}
+						// Smooth light from neighboring blocks around the vertex corner
+						getLight := func(dx, dy, dz int8) float32 {
+							nChunk, nBlock := calculateCrossChunkNeighbor(chunkPos, key.x, key.y, key.z, Vec3Int8{dx, dy, dz})
+							if ch, ok := chunks[nChunk]; ok {
+								return float32(ch.blocksData[nBlock.x][nBlock.y][nBlock.z].lightLevel())
+							}
+							return 0
+						}
+						l0 := getLight(nx, ny, nz)
+						l1 := getLight(nx+a1x, ny+a1y, nz+a1z)
+						l2 := getLight(nx+a2x, ny+a2y, nz+a2z)
+						l3 := getLight(nx+a1x+a2x, ny+a1y+a2y, nz+a1z+a2z)
+						avgLight := (l0 + l1 + l2 + l3) * 0.25
+						// Directional face shading
+						dirMul := float32(1.0)
+						if face == FACE_MAP.DOWN {
+							dirMul *= 0.5
+						}
+						if face == FACE_MAP.UP {
+							dirMul *= 0.8
+						}
+						if face == FACE_MAP.FRONT || face == FACE_MAP.BACK {
+							dirMul *= 0.7
+						}
+						if face == FACE_MAP.RIGHT || face == FACE_MAP.LEFT {
+							dirMul *= 0.6
+						}
+						vertexLight := avgLight * dirMul * aoMul
+						if vertexLight < 0 {
+							vertexLight = 0
+						}
+						if vertexLight > 15 {
+							vertexLight = 15
+						}
+						GenerateBlockFace(key, chunkPos, face, &verts, *self, y, z, x, curTint, u, v, vertexLight, true)
 					}
 				}
 
