@@ -74,15 +74,15 @@ func raycast(action bool) {
 	for !(tMaxX > 1 && tMaxY > 1 && tMaxZ > 1) {
 
 		ChunkPos := chunkPosition{
-			int32(math.Floor(float64(hitPoint[0] / 32))),
-			int32(math.Floor(float64(hitPoint[1] / 32))),
-			int32(math.Floor(float64(hitPoint[2] / 32))),
+			int32(math.Floor(float64(hitPoint[0] / float32(CHUNK_SIZE)))),
+			int32(math.Floor(float64(hitPoint[1] / float32(CHUNK_SIZE)))),
+			int32(math.Floor(float64(hitPoint[2] / float32(CHUNK_SIZE)))),
 		}
 
 		pos := blockPosition{
-			uint8(math.Floor(float64(hitPoint[0]) - float64(ChunkPos.x*32))),
-			uint8(math.Floor(float64(hitPoint[1]) - float64(ChunkPos.y*32))),
-			uint8(math.Floor(float64(hitPoint[2]) - float64(ChunkPos.z*32))),
+			uint8(math.Floor(float64(hitPoint[0]) - float64(ChunkPos.x*int32(CHUNK_SIZE)))),
+			uint8(math.Floor(float64(hitPoint[1]) - float64(ChunkPos.y*int32(CHUNK_SIZE)))),
+			uint8(math.Floor(float64(hitPoint[2]) - float64(ChunkPos.z*int32(CHUNK_SIZE)))),
 		}
 		absPos := mgl32.Vec3{
 			float32(math.Floor(float64(hitPoint[0]))),
@@ -155,6 +155,11 @@ func input(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, 
 		}
 		if key == glfw.KeyF {
 			isFlying = !isFlying
+		}
+		if key == glfw.KeyF6 {
+			AmbientOcclusion = !AmbientOcclusion
+			fmt.Printf("Ambient Occlusion: %v\n", AmbientOcclusion)
+			GenerateChunkMeshes(chunks)
 		}
 		if key == glfw.KeyEscape {
 			shouldLockMouse = !shouldLockMouse

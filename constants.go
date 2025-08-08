@@ -8,7 +8,8 @@ const (
 	WALKING_SPEED    float32 = 2.3
 	JUMP_HEIGHT      float32 = 0.25
 	PLAYER_WIDTH     float32 = 0.9
-	CHUNK_SIZE       uint8   = 16 // 16^3 block sized chunks
+	CHUNK_SIZE       uint8   = 16   // 16^3 block sized chunks
+	SMOOTH_LIGHTING  bool    = true // Smooth lighting
 )
 
 type faceMapStruct struct {
@@ -36,15 +37,42 @@ const (
 	StoneID uint16 = 3
 )
 
+type BlockProperty struct {
+	IsSolid       bool
+	IsTransparent bool
+	//LightLevel   uint8
+
+}
+
+var BlockProperties = map[uint16]BlockProperty{
+	AirID: {
+		IsSolid:       false,
+		IsTransparent: true,
+	},
+	DirtID: {
+		IsSolid:       true,
+		IsTransparent: false,
+	},
+	GrassID: {
+		IsSolid:       true,
+		IsTransparent: false,
+	},
+	StoneID: {
+		IsSolid:       true,
+		IsTransparent: false,
+	},
+}
+
 var CardinalDirections = []Vec3Int8{
 	{0, 1, 0}, {0, -1, 0}, // Y-axis
 	{1, 0, 0}, {-1, 0, 0}, // X-axis
 	{0, 0, 1}, {0, 0, -1}, // Z-axis
 }
-var NumOfChunks int32 = 2
+var NumOfChunks int32 = 3
 var AntiAliasing bool = false
-var Vsync bool = false
+var Vsync bool = true
 var FPSLimit float32 = 240
+var AmbientOcclusion bool = true
 
 var scale float32 = 30
 var amplitude float32 = 10

@@ -99,6 +99,7 @@ func stringFromShaderFile(shaderFilePath string) string {
 
 	return string(content)
 }
+
 func loadShader(shaderFilePath string, shaderType uint32) uint32 {
 
 	shader := gl.CreateShader(shaderType)
@@ -212,8 +213,8 @@ func main() {
 		//gl.ColorMask(false, false, false, true)
 		//gl.ClearColor(1, 0, 1, 0)
 
+		gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-		gl.ClearColor(0.47, 0.65, 1.0, 1.0)
 		//gl.ColorMask(true, true, true, true)
 
 		deltaTime = float32(time.Since(previousFrame).Seconds())
@@ -276,6 +277,8 @@ func main() {
 		view = initViewMatrix()
 		viewLoc = gl.GetUniformLocation(opengl3d, gl.Str("view\x00"))
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
+		renderSky(projection, view)
+		gl.UseProgram(opengl3d)
 
 		for chunkPos, chunkData := range chunks {
 

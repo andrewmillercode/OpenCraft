@@ -5,7 +5,7 @@
 - [-] Fast, Accurate lighting calculations (offload to diff thread) (WIP)
 - [-] Fast, Seamless block editing within and across chunks (Breaking blocks yes, adding blocks WIP)
 - [ ] Infinite horizontal terrain generation
-- [ ] Smooth lighting (WIP)
+- [ ] Smooth lighting (WIP) — Ambient Occlusion (AO) planned; toggle support present (AmbientOcclusion var and F6 key) based on 0fps.net AO approach.
 - [ ] Simple gradient skybox
 - [ ] Organize codebase (pt2)
 - [ ] Directional Blocks (e.g logs)

@@ -13,7 +13,10 @@ type Vec3Int8 struct {
 	y int8
 	z int8
 }
-
+type WorldHeight struct {
+	MaxHeight int32
+	MinHeight int32
+}
 type chunkPosition struct {
 	x int32
 	y int32
@@ -26,19 +29,19 @@ type chunkPositionLighting struct {
 }
 
 type blockData struct {
-	blockType   uint16 // dirt, wood, stone, etc.
-	blockLight  uint8  // light level of the block
-	sunLight    uint8  // sunlight level of the block
-	transparent bool   // can light pass through this block?
+	blockType  uint16 // dirt, wood, stone, etc.
+	blockLight uint8  // light level of the block
+	sunLight   uint8  // sunlight level of the block
 }
 
 func (block blockData) isSolid() bool {
-	switch block.blockType {
-	case AirID:
-		return false
-	default:
-		return true
-	}
+	return BlockProperties[block.blockType].IsSolid
+}
+func (block blockData) isTransparent() bool {
+	return BlockProperties[block.blockType].IsTransparent
+}
+func (block blockData) lightLevel() uint8 {
+	return max(block.blockLight, block.sunLight)
 }
 
 type chunkData struct {
