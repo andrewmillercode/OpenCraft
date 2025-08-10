@@ -11,13 +11,13 @@ import (
 	"strconv"
 	"time"
 
+	_ "net/http/pprof"
+
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/ojrac/opensimplex-go"
-
-	_ "net/http/pprof"
 )
 
 // Import for side effects
@@ -161,8 +161,8 @@ func main() {
 	}
 	defer glfw.Terminate()
 
-	glfw.WindowHint(glfw.ContextVersionMajor, 3)
-	glfw.WindowHint(glfw.ContextVersionMinor, 3)
+	glfw.WindowHint(glfw.ContextVersionMajor, 4)
+	glfw.WindowHint(glfw.ContextVersionMinor, 1)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 	window, err := glfw.CreateWindow(1600, 900, "OpenCraft", nil, nil)
@@ -174,6 +174,8 @@ func main() {
 
 	if Vsync {
 		glfw.SwapInterval(1)
+	} else {
+		glfw.SwapInterval(0)
 	}
 	opengl3d := initOpenGL3D()
 
@@ -227,9 +229,8 @@ func main() {
 	initialized := false
 
 	for !window.ShouldClose() {
-		gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-		glfw.PollEvents()
+
 		deltaTime = float32(time.Since(previousFrame).Seconds())
 		previousFrame = time.Now()
 
@@ -287,7 +288,7 @@ func main() {
 		view = initViewMatrix()
 
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
-		//	renderSky(projection, view)
+		renderSky(projection, view)
 		gl.UseProgram(opengl3d)
 
 		ProcessPendingMeshRebuilds()
@@ -333,12 +334,13 @@ func main() {
 		}
 
 		window.SwapBuffers()
+		glfw.PollEvents()
+		updateFPS()
 		frameCount++
 		if !initialized {
 			initialized = true
 			fmt.Printf("Seconds to generate: %.2f", time.Since(startTime).Seconds())
 		}
-		updateFPS()
 
 	}
 }

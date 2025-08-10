@@ -1,5 +1,4 @@
-#version 330 core
-
+#version 410 core
 in vec3 vDirection;
 out vec4 color;
 

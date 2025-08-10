@@ -1,4 +1,4 @@
-#version 330 core
+#version 410 core
 
 // Vertex shader for rendering a skybox-style gradient.
 // Expects a cube VAO with positions at layout(location=0).
