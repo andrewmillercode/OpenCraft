@@ -12,6 +12,8 @@ import (
 	"github.com/golang/freetype"
 )
 
+var textVAO uint32
+
 // Sets up freetype context and canvas with desired font
 func loadFont(pathToFont string) (*freetype.Context, *image.RGBA) {
 	file, err := os.Open(pathToFont)
@@ -41,10 +43,7 @@ func loadFont(pathToFont string) (*freetype.Context, *image.RGBA) {
 	return ctx, dst
 }
 
-func createText(ctx *freetype.Context, content interface{}, fontSize float64, isUpdated bool, position mgl32.Vec2, dst *image.RGBA, program uint32) text {
-
-	
-
+func initTextVAO() {
 	vertices := []float32{
 		0.0, 1.0, 0.0, 0.0, 1.0, // Top-left
 		0.0, 0.0, 0.0, 0.0, 0.0, // Bottom-left
@@ -54,14 +53,9 @@ func createText(ctx *freetype.Context, content interface{}, fontSize float64, is
 		1.0, 0.0, 0.0, 1.0, 0.0, // Bottom-right
 		1.0, 1.0, 0.0, 1.0, 1.0,
 	}
-	textTexture := uploadTextTexture(dst)
-	gl.BindTexture(gl.TEXTURE_2D, textTexture) // Upload text as a texture
-	textureLoc2D := gl.GetUniformLocation(program, gl.Str("TexCoord\x00"))
-	gl.Uniform1i(textureLoc2D, 0)
 
-	var vao uint32
-	gl.GenVertexArrays(1, &vao)
-	gl.BindVertexArray(vao)
+	gl.GenVertexArrays(1, &textVAO)
+	gl.BindVertexArray(textVAO)
 
 	var vbo uint32
 	gl.GenBuffers(1, &vbo)
@@ -71,16 +65,21 @@ func createText(ctx *freetype.Context, content interface{}, fontSize float64, is
 	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, 5*4, nil)
 	gl.EnableVertexAttribArray(1)
 	gl.VertexAttribPointerWithOffset(1, 2, gl.FLOAT, false, 5*4, uintptr(3*4))
+}
+
+func createText(ctx *freetype.Context, content interface{}, fontSize float64, isUpdated bool, position mgl32.Vec2, dst *image.RGBA, program uint32) text {
+	textTexture := uploadTextTexture(dst)
+	gl.BindTexture(gl.TEXTURE_2D, textTexture) // Upload text as a texture
+	textureLoc2D := gl.GetUniformLocation(program, gl.Str("TexCoord\x00"))
+	gl.Uniform1i(textureLoc2D, 0)
 
 	return text{
-		VAO:      vao,
 		Texture:  textTexture,
 		Position: position,
 		Update:   isUpdated,
 		Content:  content,
 		FontSize: fontSize,
 	}
-
 }
 func clearImage(img *image.RGBA) {
 	for i := range img.Pix {
@@ -89,19 +88,19 @@ func clearImage(img *image.RGBA) {
 }
 func uploadTextTexture(img *image.RGBA) uint32 {
 	/*
-	var texture uint32
-	gl.GenTextures(1, &texture)
-	gl.BindTexture(gl.TEXTURE_2D, texture)
-	gl.TexImage2D(
-		gl.TEXTURE_2D, 0, gl.RGBA,
-		int32(img.Rect.Size().X), int32(img.Rect.Size().Y),
-		0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix),
-	)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	return texture
+		var texture uint32
+		gl.GenTextures(1, &texture)
+		gl.BindTexture(gl.TEXTURE_2D, texture)
+		gl.TexImage2D(
+			gl.TEXTURE_2D, 0, gl.RGBA,
+			int32(img.Rect.Size().X), int32(img.Rect.Size().Y),
+			0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix),
+		)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+		return texture
 	*/
 	var texture uint32
 	gl.GenTextures(1, &texture)

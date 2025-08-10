@@ -130,7 +130,7 @@ func updateFPS() {
 	var currentTime time.Time = time.Now()
 	var timeElapsed time.Duration = currentTime.Sub(startTime)
 
-	if timeElapsed >= (50 * time.Millisecond) {
+	if timeElapsed >= (100 * time.Millisecond) {
 		fps = float64(frameCount) / timeElapsed.Seconds()
 		fpsString = "FPS: " + strconv.FormatFloat(mgl64.Round(fps, 1), 'f', -1, 32)
 		println(fpsString)
@@ -201,6 +201,9 @@ func main() {
 
 	ctx, dst := loadFont("assets/fonts/Mojang-Regular.ttf")
 
+	// Initialize shared text VAO
+	initTextVAO()
+
 	// Set up orthographic projection for 2D (UI)
 	orthographicProjection := mgl32.Ortho(0, 1600, 900, 0, -1, 1)
 	projectionLoc2D := gl.GetUniformLocation(opengl2d, gl.Str("projection\x00"))
@@ -227,7 +230,6 @@ func main() {
 	window.SetKeyCallback(input)
 
 	initialized := false
-
 	for !window.ShouldClose() {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
@@ -256,6 +258,11 @@ func main() {
 				isSprintingState = "Sprinting: " + strconv.FormatBool(isSprinting)
 				isGroundedState = "Grounded: " + strconv.FormatBool(isOnGround)
 				velString = "Velocity: " + strconv.FormatFloat(mgl64.Round(float64(velocity[0]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[1]), 2), 'f', -1, 32) + "," + strconv.FormatFloat(mgl64.Round(float64(velocity[2]), 2), 'f', -1, 32)
+				for i := range textObjects {
+					if textObjects[i].Update {
+						updateTextTexture(textObjects[i].Content, &textObjects[i], ctx, dst)
+					}
+				}
 			}
 			if !isFlying {
 				velocity[1] -= 0.02 //gravity
@@ -309,26 +316,24 @@ func main() {
 		chunksMu.RUnlock()
 
 		if showDebug {
-			//UI RENDERING STAGE
-
 			gl.Disable(gl.DEPTH_TEST)
 			gl.Disable(gl.CULL_FACE)
-
 			gl.UseProgram(opengl2d)
 			gl.Enable(gl.BLEND)
-			orthographicProjection := mgl32.Ortho(0, 1600, 900, 0, -1, 1)
-
 			gl.UniformMatrix4fv(projectionLoc2D, 1, false, &orthographicProjection[0])
 
-			for i, obj := range textObjects {
-				model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0).Mul4(mgl32.Scale3D(512, 512, 1.0))
+			// Bind the shared text VAO once
+			gl.BindVertexArray(textVAO)
 
-				gl.UniformMatrix4fv(modelLoc2D, 1, false, &model[0])
-				if obj.Update {
-					updateTextTexture(obj.Content, &textObjects[i], ctx, dst)
+			var currentTexture uint32
+			for _, obj := range textObjects {
+				if obj.Texture != currentTexture {
+					gl.BindTexture(gl.TEXTURE_2D, obj.Texture)
+					currentTexture = obj.Texture
 				}
-				gl.BindTexture(gl.TEXTURE_2D, obj.Texture)
-				gl.BindVertexArray(obj.VAO)
+
+				model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0).Mul4(mgl32.Scale3D(512, 512, 1.0))
+				gl.UniformMatrix4fv(modelLoc2D, 1, false, &model[0])
 				gl.DrawArrays(gl.TRIANGLES, 0, 6) // Assuming each text uses 6 vertices
 			}
 		}

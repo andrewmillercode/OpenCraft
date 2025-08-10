@@ -34,6 +34,10 @@ type blockData struct {
 	sunLight   uint8  // sunlight level of the block
 }
 
+/*
+  uint16 -> 16
+*/
+//16384 bytes per chunk
 func (block blockData) isSolid() bool {
 	return BlockProperties[block.blockType].IsSolid
 }
@@ -56,7 +60,6 @@ type aabb struct {
 }
 
 type text struct {
-	VAO      uint32
 	Texture  uint32
 	Position mgl32.Vec2
 	Update   bool
