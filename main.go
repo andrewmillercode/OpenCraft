@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
@@ -128,9 +130,10 @@ func updateFPS() {
 	var currentTime time.Time = time.Now()
 	var timeElapsed time.Duration = currentTime.Sub(startTime)
 
-	if timeElapsed >= (100 * time.Millisecond) {
+	if timeElapsed >= (50 * time.Millisecond) {
 		fps = float64(frameCount) / timeElapsed.Seconds()
 		fpsString = "FPS: " + strconv.FormatFloat(mgl64.Round(fps, 1), 'f', -1, 32)
+		println(fpsString)
 		frameCount = 0
 		startTime = currentTime
 	}
@@ -145,6 +148,13 @@ func lerp(a, b mgl32.Vec3, alpha float32) mgl32.Vec3 {
 
 func main() {
 	runtime.LockOSThread()
+
+	// Start profiling server
+	go func() {
+		log.Println("Profiling server starting on http://localhost:6060")
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	err := glfw.Init()
 	if err != nil {
 		panic(err)
@@ -161,13 +171,13 @@ func main() {
 		panic(err)
 	}
 	window.MakeContextCurrent()
-	window.SetFramebufferSizeCallback(OnWindowResize)
+
 	if Vsync {
 		glfw.SwapInterval(1)
 	}
 	opengl3d := initOpenGL3D()
 
-	gl.Enable(gl.BLEND)
+	gl.Disable(gl.BLEND)
 	gl.BlendEquation(gl.FUNC_ADD)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 	gl.UseProgram(opengl3d)
@@ -183,8 +193,6 @@ func main() {
 	viewLoc := gl.GetUniformLocation(opengl3d, gl.Str("view\x00"))
 	gl.UniformMatrix4fv(projectionLoc, 1, false, &projection[0])
 	gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
-
-	createChunks()
 
 	opengl2d := initOpenGLUI()
 	gl.UseProgram(opengl2d)
@@ -207,31 +215,33 @@ func main() {
 		createText(ctx, &isSprintingState, 24, true, mgl32.Vec2{10, 340}, dst, opengl2d),
 		createText(ctx, &position, 24, true, mgl32.Vec2{10, 320}, dst, opengl2d),
 	}
+	modelLoc2D := gl.GetUniformLocation(opengl2d, gl.Str("model\x00"))
+	modelLoc3D := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
+
+	viewLoc = gl.GetUniformLocation(opengl3d, gl.Str("view\x00"))
+	//mouse look around
+	window.SetCursorPosCallback(mouseMoveCallback)
+	window.SetMouseButtonCallback(mouseInputCallback)
+	window.SetKeyCallback(input)
 
 	initialized := false
-	for !window.ShouldClose() {
-		//gl.ColorMask(false, false, false, true)
-		//gl.ClearColor(1, 0, 1, 0)
 
+	for !window.ShouldClose() {
 		gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-		//gl.ColorMask(true, true, true, true)
-
+		glfw.PollEvents()
 		deltaTime = float32(time.Since(previousFrame).Seconds())
 		previousFrame = time.Now()
+
 		clickDelayAccumulator += deltaTime
 		tickAccumulator += deltaTime
-		glfw.PollEvents()
+
 		//hide mouse
 		if shouldLockMouse {
 			window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
 		} else {
 			window.SetInputMode(glfw.CursorMode, glfw.CursorNormal)
 		}
-		//mouse look around
-		window.SetCursorPosCallback(mouseMoveCallback)
-		window.SetMouseButtonCallback(mouseInputCallback)
-		window.SetKeyCallback(input)
 
 		movement(window)
 
@@ -275,24 +285,27 @@ func main() {
 		gl.BindTexture(gl.TEXTURE_2D, blockTextureAtlas)
 
 		view = initViewMatrix()
-		viewLoc = gl.GetUniformLocation(opengl3d, gl.Str("view\x00"))
+
 		gl.UniformMatrix4fv(viewLoc, 1, false, &view[0])
-		renderSky(projection, view)
+		//	renderSky(projection, view)
 		gl.UseProgram(opengl3d)
 
+		ProcessPendingMeshRebuilds()
+
+		chunksMu.RLock()
 		for chunkPos, chunkData := range chunks {
 
 			if chunkData.trisCount > 0 {
 				//render the chunk
 				modelPos := mgl32.Translate3D(float32(chunkPos.x*int32(CHUNK_SIZE)), float32(chunkPos.y*int32(CHUNK_SIZE)), float32(chunkPos.z*int32(CHUNK_SIZE)))
-				modelMemLoc := gl.GetUniformLocation(opengl3d, gl.Str("model\x00"))
-				gl.UniformMatrix4fv(modelMemLoc, 1, false, &modelPos[0])
+
+				gl.UniformMatrix4fv(modelLoc3D, 1, false, &modelPos[0])
 				gl.BindVertexArray(chunkData.vao)
-				//wireframe: gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
 				gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
 
 			}
 		}
+		chunksMu.RUnlock()
 
 		if showDebug {
 			//UI RENDERING STAGE
@@ -301,16 +314,15 @@ func main() {
 			gl.Disable(gl.CULL_FACE)
 
 			gl.UseProgram(opengl2d)
-
+			gl.Enable(gl.BLEND)
 			orthographicProjection := mgl32.Ortho(0, 1600, 900, 0, -1, 1)
-			projectionLoc2D := gl.GetUniformLocation(opengl2d, gl.Str("projection\x00"))
+
 			gl.UniformMatrix4fv(projectionLoc2D, 1, false, &orthographicProjection[0])
 
 			for i, obj := range textObjects {
 				model := mgl32.Translate3D(obj.Position[0], obj.Position[1], 0).Mul4(mgl32.Scale3D(512, 512, 1.0))
 
-				modelLoc := gl.GetUniformLocation(opengl2d, gl.Str("model\x00"))
-				gl.UniformMatrix4fv(modelLoc, 1, false, &model[0])
+				gl.UniformMatrix4fv(modelLoc2D, 1, false, &model[0])
 				if obj.Update {
 					updateTextTexture(obj.Content, &textObjects[i], ctx, dst)
 				}
@@ -319,6 +331,7 @@ func main() {
 				gl.DrawArrays(gl.TRIANGLES, 0, 6) // Assuming each text uses 6 vertices
 			}
 		}
+
 		window.SwapBuffers()
 		frameCount++
 		if !initialized {
@@ -326,6 +339,7 @@ func main() {
 			fmt.Printf("Seconds to generate: %.2f", time.Since(startTime).Seconds())
 		}
 		updateFPS()
+
 	}
 }
 

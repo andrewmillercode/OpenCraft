@@ -90,7 +90,10 @@ func raycast(action bool) {
 			float32(math.Floor(float64(hitPoint[2]))),
 		}
 		if action {
-			if chunk, ok := chunks[ChunkPos]; ok {
+			chunksMu.RLock()
+			chunk, ok := chunks[ChunkPos]
+			chunksMu.RUnlock()
+			if ok {
 
 				if chunk.blocksData[pos.x][pos.y][pos.z].isSolid() {
 					breakBlock(pos, ChunkPos)
@@ -125,7 +128,10 @@ func raycast(action bool) {
 				int32(math.Floor(float64(hitPoint[2] / 32))),
 			}
 			tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*32))), uint8(math.Floor(float64(hitPoint[1]) - float64(tempChunkPos.y*32))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*32)))}
-			if chunk, ok := chunks[tempChunkPos]; ok {
+			chunksMu.RLock()
+			chunk, ok := chunks[tempChunkPos]
+			chunksMu.RUnlock()
+			if ok {
 				if block := chunk.blocksData[tempPos.x][tempPos.y][tempPos.z]; block.isSolid() {
 
 					isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
@@ -159,7 +165,7 @@ func input(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, 
 		if key == glfw.KeyF6 {
 			AmbientOcclusion = !AmbientOcclusion
 			fmt.Printf("Ambient Occlusion: %v\n", AmbientOcclusion)
-			GenerateChunkMeshes(chunks)
+
 		}
 		if key == glfw.KeyEscape {
 			shouldLockMouse = !shouldLockMouse

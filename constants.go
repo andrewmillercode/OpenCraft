@@ -70,8 +70,7 @@ var CardinalDirections = []Vec3Int8{
 }
 var NumOfChunks int32 = 3
 var AntiAliasing bool = false
-var Vsync bool = true
-var FPSLimit float32 = 240
+var Vsync bool = false
 var AmbientOcclusion bool = true
 
 var scale float32 = 30

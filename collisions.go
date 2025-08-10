@@ -21,7 +21,10 @@ func collisions() {
 			for y := -3; y <= 3; y++ {
 				currentPlayerChunkPos := chunkPosition{int32(math.Floor(float64(cameraPosition[0]/float32(CHUNK_SIZE)))) + int32(x), int32(math.Floor(float64(cameraPosition[1]/float32(CHUNK_SIZE)))) + int32(y), int32(math.Floor(float64(cameraPosition[2]/float32(CHUNK_SIZE)))) + int32(z)}
 
-				if chunk, ok := chunks[currentPlayerChunkPos]; ok {
+				chunksMu.RLock()
+				chunk, ok := chunks[currentPlayerChunkPos]
+				chunksMu.RUnlock()
+				if ok {
 					for range 3 {
 						var colliders []collider
 						for blockX := pIntX - 3; blockX < pIntX+3; blockX++ {
