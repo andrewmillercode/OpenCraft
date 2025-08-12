@@ -12,19 +12,13 @@ import (
 
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
-	//"container/list"
 )
 
-var chunks = make(map[chunkPosition]*chunkData)
-var chunksMu sync.RWMutex
+var pillars = make(map[PillarPos]*Pillar)
+var pillarsMu sync.RWMutex
 
-var dirtyMu sync.Mutex
 var dirtyChunks = make(map[chunkPosition]*[]float32)
-
-var worldHeight = WorldHeight{}
-
-var lightingChunks = make(map[chunkPositionLighting][]chunkPosition)
-var lightingMu sync.RWMutex
+var dirtyChunksMu sync.Mutex
 
 func GenerateChunkMeshData() *[]*[]float32 {
 	var vertArrays []*[]float32
@@ -34,8 +28,8 @@ func GenerateChunkMeshData() *[]*[]float32 {
 	return &vertArrays
 }
 
-func chunk(pos chunkPosition) *chunkData {
-	var blocksData = [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]*blockData{}
+func chunk(pos chunkPosition) *Chunk {
+	var blocksData = [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]*Block{}
 	const _CHUNK_SIZE int32 = int32(CHUNK_SIZE)
 
 	for x := range CHUNK_SIZE {
@@ -49,7 +43,7 @@ func chunk(pos chunkPosition) *chunkData {
 
 				if worldY > noiseValue {
 					// Air blocks above terrain
-					blocksData[x][y][z] = &blockData{blockType: AirID}
+					blocksData[x][y][z] = &Block{blockType: AirID}
 
 				} else {
 					// At or below terrain level
@@ -58,25 +52,25 @@ func chunk(pos chunkPosition) *chunkData {
 						isCave := fractalNoise3D(int32(x)+(pos.x*_CHUNK_SIZE), int32(y)+int32(pos.y*_CHUNK_SIZE), int32(z)+(pos.z*_CHUNK_SIZE), 2, 12)
 						if isCave > 0.1 {
 
-							blocksData[x][y][z] = &blockData{blockType: AirID}
+							blocksData[x][y][z] = &Block{blockType: AirID}
 
 						} else {
 							// Solid underground blocks
 							if worldY == noiseValue {
-								blocksData[x][y][z] = &blockData{blockType: DirtID}
+								blocksData[x][y][z] = &Block{blockType: DirtID}
 
 							} else {
 
-								blocksData[x][y][z] = &blockData{blockType: StoneID}
+								blocksData[x][y][z] = &Block{blockType: StoneID}
 							}
 						}
 					} else {
 						// Surface/above-ground terrain
 						if worldY == noiseValue {
-							blocksData[x][y][z] = &blockData{blockType: StoneID}
+							blocksData[x][y][z] = &Block{blockType: StoneID}
 
 						} else {
-							blocksData[x][y][z] = &blockData{blockType: DirtID}
+							blocksData[x][y][z] = &Block{blockType: DirtID}
 
 						}
 					}
@@ -86,7 +80,7 @@ func chunk(pos chunkPosition) *chunkData {
 		}
 	}
 
-	return &chunkData{
+	return &Chunk{
 		blocksData:   blocksData,
 		lightSources: []blockPosition{},
 		vao:          0,
@@ -178,7 +172,7 @@ func BFSLightProp(lightSources []chunkBlockPositions, inversePropagation bool) m
 			newZ := int16(z) + int16(dir.z)
 
 			var neighbor chunkBlockPositions
-			var targetBlock *blockData
+			var targetBlock *Block
 
 			// Check if within current chunk bounds
 			if newX >= 0 && newX < int16(CHUNK_SIZE) &&
@@ -365,7 +359,7 @@ func fractalNoise3D(x int32, y int32, z int32, amplitude float32, scale float32)
 
 type adjBjockResult struct {
 	blockExists bool
-	blockData   *blockData
+	Block       *Block
 	chunkPos    chunkPosition
 	blockPos    blockPosition
 }
@@ -418,15 +412,15 @@ func getAdjBlockFromFace(key blockPosition, chunkPos chunkPosition, face uint8) 
 	ch, ok := chunks[adjChunk]
 	chunksMu.RUnlock()
 	if ok {
-		return adjBjockResult{blockExists: true, blockData: ch.blocksData[adjBlock.x][adjBlock.y][adjBlock.z], chunkPos: adjChunk, blockPos: adjBlock}
+		return adjBjockResult{blockExists: true, Block: ch.blocksData[adjBlock.x][adjBlock.y][adjBlock.z], chunkPos: adjChunk, blockPos: adjBlock}
 	}
-	return adjBjockResult{blockExists: false, blockData: &blockData{}, chunkPos: chunkPosition{}, blockPos: blockPosition{}}
+	return adjBjockResult{blockExists: false, Block: &Block{}, chunkPos: chunkPosition{}, blockPos: blockPosition{}}
 }
 
 var grassTint = mgl32.Vec3{0.486, 0.741, 0.419}
 var noTint = mgl32.Vec3{1.0, 1.0, 1.0}
 
-func GenerateBlockFace(key blockPosition, chunkPos chunkPosition, faceIndex uint8, verts *[]float32, self blockData, y, z, x float32, curTint mgl32.Vec3, u, v uint8, vertexLight float32, useTextureOverlay bool) {
+func GenerateBlockFace(key blockPosition, chunkPos chunkPosition, faceIndex uint8, verts *[]float32, self Block, y, z, x float32, curTint mgl32.Vec3, u, v uint8, vertexLight float32, useTextureOverlay bool) {
 	textureUV := getTextureCoords(self.blockType, faceIndex)
 
 	if useTextureOverlay {
@@ -438,14 +432,14 @@ func GenerateBlockFace(key blockPosition, chunkPos chunkPosition, faceIndex uint
 	}
 }
 
-func preProcessChunkVAO(_chunkData *chunkData, chunkPos chunkPosition) *[]float32 {
+func preProcessChunkVAO(_Chunk *Chunk, chunkPos chunkPosition) *[]float32 {
 	var verts []float32
 
 	for x := range CHUNK_SIZE {
 		for y := range CHUNK_SIZE {
 			for z := range CHUNK_SIZE {
 				key := blockPosition{x, y, z}
-				self := _chunkData.blocksData[x][y][z]
+				self := _Chunk.blocksData[x][y][z]
 
 				if self.isSolid() == false {
 					continue
@@ -467,7 +461,7 @@ func preProcessChunkVAO(_chunkData *chunkData, chunkPos chunkPosition) *[]float3
 
 				for _, face := range faces {
 					result := getAdjBlockFromFace(key, chunkPos, face)
-					shouldRender[face] = !result.blockExists || !result.blockData.isSolid()
+					shouldRender[face] = !result.blockExists || !result.Block.isSolid()
 					if hideEntireBlock && shouldRender[face] {
 						hideEntireBlock = false
 					}
@@ -631,7 +625,7 @@ func isBorderBlock(pos blockPosition) bool {
 func breakBlock(pos blockPosition, chunkPos chunkPosition) {
 
 	chunksMu.RLock()
-	chunks[chunkPos].blocksData[pos.x][pos.y][pos.z] = &blockData{
+	chunks[chunkPos].blocksData[pos.x][pos.y][pos.z] = &Block{
 		blockType: AirID,
 	}
 	chunksMu.RUnlock()
@@ -643,16 +637,16 @@ func breakBlock(pos blockPosition, chunkPos chunkPosition) {
 	for i := range uint8(6) {
 		// Check all 6 faces for adjacent light sources
 		adjBlock := getAdjBlockFromFace(pos, chunkPos, i)
-		if adjBlock.blockExists && adjBlock.blockData.sunLight > 0 {
+		if adjBlock.blockExists && adjBlock.Block.sunLight > 0 {
 
 			// Sunlight from directly above propagates downwards at full strength.
-			if i == FACE_MAP.UP && adjBlock.blockData.sunLight == 15 {
+			if i == FACE_MAP.UP && adjBlock.Block.sunLight == 15 {
 				newLightLevel = 15
 				break
 			}
 			// For other light, it diminishes by 1.
-			if adjBlock.blockData.sunLight > newLightLevel {
-				newLightLevel = adjBlock.blockData.sunLight - 1
+			if adjBlock.Block.sunLight > newLightLevel {
+				newLightLevel = adjBlock.Block.sunLight - 1
 			}
 		}
 	}
@@ -671,7 +665,7 @@ func breakBlock(pos blockPosition, chunkPos chunkPosition) {
 		visitedArea = BFSLightProp(repropagationQueue, false)
 	}
 	// Update affected chunks
-	chunksToUpdate := make(map[chunkPosition]*chunkData)
+	chunksToUpdate := make(map[chunkPosition]*Chunk)
 	for visited := range visitedArea {
 		chunksToUpdate[visited.chunkPos] = chunks[visited.chunkPos]
 	}
@@ -694,9 +688,9 @@ func breakBlock(pos blockPosition, chunkPos chunkPosition) {
 
 func placeBlock(pos blockPosition, chunkPos chunkPosition, blockType uint16) {
 	/*
-		chunksToUpdate := make(map[chunkPosition]chunkData)
+		chunksToUpdate := make(map[chunkPosition]Chunk)
 
-		chunks[chunkPos].blocksData[pos.x][pos.y][pos.z] = &blockData{
+		chunks[chunkPos].blocksData[pos.x][pos.y][pos.z] = &Block{
 			blockType: blockType,
 		}
 
@@ -911,10 +905,10 @@ func createChunk(pos chunkPosition) {
 		return
 	}
 
-	chunkData := chunk(pos)
+	Chunk := chunk(pos)
 
 	chunksMu.Lock()
-	chunks[pos] = chunkData
+	chunks[pos] = Chunk
 
 	chunksMu.Unlock()
 	propagateSunLightColumn(chunkPositionLighting{pos.x, pos.z})
