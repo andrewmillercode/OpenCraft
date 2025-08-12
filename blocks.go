@@ -17,7 +17,7 @@ import (
 var pillars = make(map[PillarPos]*Pillar)
 var pillarsMu sync.RWMutex
 
-var dirtyChunks = make(map[chunkPosition]*[]float32)
+var dirtyChunks = make(map[ChunkPosition]*[]float32)
 var dirtyChunksMu sync.Mutex
 
 func GenerateChunkMeshData() *[]*[]float32 {
@@ -28,18 +28,16 @@ func GenerateChunkMeshData() *[]*[]float32 {
 	return &vertArrays
 }
 
-func chunk(pos chunkPosition) *Chunk {
+func newChunk(chunkPos ChunkPosition) *Chunk {
 	var blocksData = [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]*Block{}
-	const _CHUNK_SIZE int32 = int32(CHUNK_SIZE)
+	for x := range CHUNK_SIZE_i32 {
+		for z := range CHUNK_SIZE_i32 {
 
-	for x := range CHUNK_SIZE {
-		for z := range CHUNK_SIZE {
-
-			noiseValue := fractalNoise(int32(x)+(pos.x*_CHUNK_SIZE), int32(z)+(pos.z*_CHUNK_SIZE), amplitude, 2, 1.5, 0.5, scale)
+			noiseValue := fractalNoise(int32(x)+(chunkPos.pillarPos.x*CHUNK_SIZE_i32), int32(z)+(chunkPos.pillarPos.z*CHUNK_SIZE_i32), amplitude, 2, 1.5, 0.5, scale)
 
 			for y := range CHUNK_SIZE {
 
-				worldY := int16(y) + int16(pos.y*_CHUNK_SIZE)
+				worldY := int32(y) + chunkPos.getY()
 
 				if worldY > noiseValue {
 					// Air blocks above terrain
@@ -49,7 +47,7 @@ func chunk(pos chunkPosition) *Chunk {
 					// At or below terrain level
 					if worldY < 0 {
 						// Underground cave generation
-						isCave := fractalNoise3D(int32(x)+(pos.x*_CHUNK_SIZE), int32(y)+int32(pos.y*_CHUNK_SIZE), int32(z)+(pos.z*_CHUNK_SIZE), 2, 12)
+						isCave := fractalNoise3D(int32(x)+(chunkPos.pillarPos.x*CHUNK_SIZE_i32), int32(y)+(chunkPos.getY()*CHUNK_SIZE_i32), int32(z)+(chunkPos.pillarPos.z*CHUNK_SIZE_i32), 2, 12)
 						if isCave > 0.1 {
 
 							blocksData[x][y][z] = &Block{blockType: AirID}
@@ -122,6 +120,7 @@ func loadTextureAtlas(textureFilePath string) uint32 {
 	return textureID
 
 }
+
 func getTextureCoords(blockID uint16, faceIndex uint8) []float32 {
 	blockID -= 1 // Adjust blockID to be zero-based( account for air block)
 	// Calculate UV coordinates
@@ -133,6 +132,7 @@ func getTextureCoords(blockID uint16, faceIndex uint8) []float32 {
 	return []float32{u1, v1, u2, v2}
 
 }
+
 func BFSLightProp(lightSources []chunkBlockPositions, inversePropagation bool) map[chunkBlockPositions]struct{} {
 	queue := []chunkBlockPositions{}
 	visited := make(map[chunkBlockPositions]struct{})
@@ -319,13 +319,13 @@ func createBlockShadow(newBlock chunkBlockPositions) []chunkBlockPositions {
 	return blocks
 }
 
-func fractalNoise(x int32, z int32, amplitude float32, octaves int, lacunarity float32, persistence float32, scale float32) int16 {
-	val := int16(0)
+func fractalNoise(x int32, z int32, amplitude float32, octaves int, lacunarity float32, persistence float32, scale float32) int32 {
+	val := int32(0)
 	x1 := float32(x)
 	z1 := float32(z)
 
 	for i := 0; i < octaves; i++ {
-		val += int16(noise.Eval2(x1/scale, z1/scale) * amplitude)
+		val += int32(noise.Eval2(x1/scale, z1/scale) * amplitude)
 		z1 *= lacunarity
 		x1 *= lacunarity
 		amplitude *= persistence

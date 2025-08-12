@@ -21,6 +21,10 @@ type ChunkPosition struct {
 	index     uint8
 }
 
+func (c ChunkPosition) getY() int32 {
+	return int32(c.index * CHUNK_SIZE)
+}
+
 type Chunk struct {
 	blocksData   [CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]*Block
 	lightSources []blockPosition

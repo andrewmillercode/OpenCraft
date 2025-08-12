@@ -8,8 +8,11 @@ const (
 	WALKING_SPEED    float32 = 2.3
 	JUMP_HEIGHT      float32 = 0.25
 	PLAYER_WIDTH     float32 = 0.9
-	CHUNK_SIZE       uint8   = 16 // 16^3 block sized chunks
-	RENDER_DISTANCE  uint8   = 10
+
+	CHUNK_SIZE     uint8 = 16 // 16^3 block sized chunks
+	CHUNK_SIZE_i32 int32 = 16
+
+	RENDER_DISTANCE uint8 = 10
 )
 
 type faceMapStruct struct {
