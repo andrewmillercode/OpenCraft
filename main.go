@@ -203,7 +203,9 @@ func main() {
 
 	// Initialize shared text VAO
 	initTextVAO()
-
+	var maxLayers int32
+	gl.GetIntegerv(gl.MAX_ARRAY_TEXTURE_LAYERS, &maxLayers)
+	fmt.Printf("Max texture array layers: %d\n", maxLayers)
 	// Set up orthographic projection for 2D (UI)
 	orthographicProjection := mgl32.Ortho(0, 1600, 900, 0, -1, 1)
 	projectionLoc2D := gl.GetUniformLocation(opengl2d, gl.Str("projection\x00"))
@@ -228,6 +230,8 @@ func main() {
 	window.SetCursorPosCallback(mouseMoveCallback)
 	window.SetMouseButtonCallback(mouseInputCallback)
 	window.SetKeyCallback(input)
+
+	go startChunkStreamer()
 
 	initialized := false
 	for !window.ShouldClose() {
@@ -298,7 +302,7 @@ func main() {
 		renderSky(projection, view)
 		gl.UseProgram(opengl3d)
 
-		ProcessPendingMeshRebuilds()
+		ProcessChunks()
 
 		chunksMu.RLock()
 		for chunkPos, chunkData := range chunks {

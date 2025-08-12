@@ -2,14 +2,14 @@ package main
 
 const (
 	SEED             int64   = 1
-	TICK_UPDATE_RATE float32 = float32(1.0 / 30.0) //tick rate (30 TPS) ticks per second
+	TICK_UPDATE_RATE float32 = float32(1.0 / 30.0)
 	RUNNING_SPEED    float32 = 1.3
-	FLYING_SPEED     float32 = 5
+	FLYING_SPEED     float32 = 10
 	WALKING_SPEED    float32 = 2.3
 	JUMP_HEIGHT      float32 = 0.25
 	PLAYER_WIDTH     float32 = 0.9
-	CHUNK_SIZE       uint8   = 16   // 16^3 block sized chunks
-	SMOOTH_LIGHTING  bool    = true // Smooth lighting
+	CHUNK_SIZE       uint8   = 16 // 16^3 block sized chunks
+	RENDER_DISTANCE  uint8   = 10
 )
 
 type faceMapStruct struct {
@@ -40,8 +40,6 @@ const (
 type BlockProperty struct {
 	IsSolid       bool
 	IsTransparent bool
-	//LightLevel   uint8
-
 }
 
 var BlockProperties = map[uint16]BlockProperty{
@@ -68,7 +66,7 @@ var CardinalDirections = []Vec3Int8{
 	{1, 0, 0}, {-1, 0, 0}, // X-axis
 	{0, 0, 1}, {0, 0, -1}, // Z-axis
 }
-var NumOfChunks int32 = 3
+
 var AntiAliasing bool = false
 var Vsync bool = false
 var AmbientOcclusion bool = true

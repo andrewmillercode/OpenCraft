@@ -1,12 +1,15 @@
-# Tasks (in order of priority)
+# Tasks
 
-- [x] Switch to 32 x 32 x 32 chunking
+- [] Fixed world height using uint16. Cap at 1024 blocks.
+- [] Frustum culling
+- [] Occlusion culling
+- [] LOD system
+
+
 - [x] Organize codebase (pt1)
 - [-] Fast, Accurate lighting calculations (offload to diff thread) (WIP)
 - [-] Fast, Seamless block editing within and across chunks (Breaking blocks yes, adding blocks WIP)
 - [ ] Infinite horizontal terrain generation
-- [ ] Smooth lighting (WIP) — Ambient Occlusion (AO) planned; toggle support present (AmbientOcclusion var and F6 key) based on 0fps.net AO approach.
-- [ ] Simple gradient skybox
 - [ ] Organize codebase (pt2)
 - [ ] Directional Blocks (e.g logs)
 - [ ] Emissive Blocks (light)

@@ -16,46 +16,22 @@ import (
 )
 
 var chunks = make(map[chunkPosition]*chunkData)
-var worldHeight = WorldHeight{}
-var lightingChunks = make(map[chunkPositionLighting][]chunkPosition)
 var chunksMu sync.RWMutex
+
+var dirtyMu sync.Mutex
+var dirtyChunks = make(map[chunkPosition]*[]float32)
+
+var worldHeight = WorldHeight{}
+
+var lightingChunks = make(map[chunkPositionLighting][]chunkPosition)
 var lightingMu sync.RWMutex
-var pendingMu sync.Mutex
-var pendingMeshes = make(map[chunkPosition]struct{})
 
-func GenerateChunkMeshes(_chunks map[chunkPosition]*chunkData) {
-	for chunkPos, chunk := range _chunks {
-		vao, trisCount := createChunkVAO(chunk, chunkPos)
-		chunk.vao = vao
-		chunk.trisCount = trisCount
+func GenerateChunkMeshData() *[]*[]float32 {
+	var vertArrays []*[]float32
+	for chunkPos, chunk := range chunks {
+		vertArrays = append(vertArrays, preProcessChunkVAO(chunk, chunkPos))
 	}
-}
-
-func createChunks() {
-
-	for x := int32(-NumOfChunks); x <= NumOfChunks; x++ {
-		for z := int32(-NumOfChunks); z <= NumOfChunks; z++ {
-
-			horizPos := chunkPositionLighting{x, z}
-			for y := int32(8); y > -8; y-- {
-				var chunkPos chunkPosition = chunkPosition{x, y, z}
-				//store block data
-				chunks[chunkPos] = chunk(chunkPos)
-				//store lighting chunk
-				lightingChunks[horizPos] = append(lightingChunks[horizPos], chunkPosition{x, y, z})
-				if y > worldHeight.MaxHeight {
-					worldHeight.MaxHeight = y * int32(CHUNK_SIZE)
-				}
-				if y < worldHeight.MinHeight {
-					worldHeight.MinHeight = y * int32(CHUNK_SIZE)
-				}
-			}
-
-		}
-	}
-
-	propagateSunLightGlobal()
-	GenerateChunkMeshes(chunks)
+	return &vertArrays
 }
 
 func chunk(pos chunkPosition) *chunkData {
@@ -169,7 +145,6 @@ func BFSLightProp(lightSources []chunkBlockPositions, inversePropagation bool) m
 	head := 0
 
 	chunksMu.RLock()
-	defer chunksMu.RUnlock()
 
 	for _, source := range lightSources {
 		queue = append(queue, source)
@@ -245,7 +220,7 @@ func BFSLightProp(lightSources []chunkBlockPositions, inversePropagation bool) m
 			}
 		}
 	}
-
+	chunksMu.RUnlock()
 	return visited
 }
 
@@ -314,73 +289,39 @@ func getFaceFromDirection(dir struct{ dx, dy, dz int8 }) uint8 {
 	}
 }
 
-func propagateSunLightGlobal() {
-
-	var blocks []chunkBlockPositions
-	var chunkPos chunkPosition
-
-	for _, chunklets := range lightingChunks {
-		for x := range CHUNK_SIZE {
-			for z := range CHUNK_SIZE {
-
-				i := 0
-				chunkPos = chunklets[i]
-				y := uint8(CHUNK_SIZE - 1)
-				for globalY := worldHeight.MaxHeight; globalY > worldHeight.MinHeight; globalY-- {
-
-					y--
-					if y == 0 && i < len(chunklets)-1 {
-						i++
-						y = CHUNK_SIZE - 1
-						chunkPos = chunklets[i]
-					}
-
-					blockPos := blockPosition{x, y, z}
-					if block := chunks[chunkPos].blocksData[x][y][z]; !block.isSolid() {
-						block.sunLight = 15
-						blocks = append(blocks, chunkBlockPositions{chunkPos, blockPos})
-						continue
-					}
-					break
-
-				}
-			}
-		}
-	}
-
-	BFSLightProp(blocks, false)
-
-}
-
 func createBlockShadow(newBlock chunkBlockPositions) []chunkBlockPositions {
 	var blocks []chunkBlockPositions
-	var chunkPos chunkPosition = newBlock.chunkPos
+	/*
 
-	chunklets := lightingChunks[chunkPositionLighting{newBlock.chunkPos.x, newBlock.chunkPos.z}]
-	x := newBlock.blockPos.x
-	y := newBlock.blockPos.y - 1 // start from the air block below
-	z := newBlock.blockPos.z
+		var chunkPos chunkPosition = newBlock.chunkPos
 
-	i := int32(len(chunklets)/2) / (chunkPos.y * int32(CHUNK_SIZE))
-	chunkPos = chunklets[i]
+		chunklets := lightingChunks[chunkPositionLighting{newBlock.chunkPos.x, newBlock.chunkPos.z}]
+		x := newBlock.blockPos.x
+		y := newBlock.blockPos.y - 1 // start from the air block below
+		z := newBlock.blockPos.z
 
-	for globalY := int32(256); globalY > -240; globalY-- {
+		i := int32(len(chunklets)/2) / (chunkPos.y * int32(CHUNK_SIZE))
+		chunkPos = chunklets[i]
 
-		y--
-		if y == 0 {
-			i++
-			y = CHUNK_SIZE
-			chunkPos = chunklets[i]
+		for globalY := int32(256); globalY > -240; globalY-- {
+
+			y--
+			if y == 0 {
+				i++
+				y = CHUNK_SIZE
+				chunkPos = chunklets[i]
+			}
+
+			blockPos := blockPosition{x, y, z}
+
+			blocks = append(blocks, chunkBlockPositions{chunkPos, blockPos})
+
+			continue
+
 		}
 
-		blockPos := blockPosition{x, y, z}
 
-		blocks = append(blocks, chunkBlockPositions{chunkPos, blockPos})
-
-		continue
-
-	}
-
+	*/
 	return blocks
 }
 
@@ -497,8 +438,7 @@ func GenerateBlockFace(key blockPosition, chunkPos chunkPosition, faceIndex uint
 	}
 }
 
-func createChunkVAO(_chunkData *chunkData, chunkPos chunkPosition) (uint32, int32) {
-
+func preProcessChunkVAO(_chunkData *chunkData, chunkPos chunkPosition) *[]float32 {
 	var verts []float32
 
 	for x := range CHUNK_SIZE {
@@ -595,37 +535,7 @@ func createChunkVAO(_chunkData *chunkData, chunkPos chunkPosition) (uint32, int3
 						}
 						// AO factor based on occluders
 						aoMul := float32(1.0)
-						if AmbientOcclusion {
-							getSolid := func(dx, dy, dz int8) bool {
-								nChunk, nBlock := calculateCrossChunkNeighbor(chunkPos, key.x, key.y, key.z, Vec3Int8{dx, dy, dz})
-								chunksMu.RLock()
-								ch, ok := chunks[nChunk]
-								chunksMu.RUnlock()
-								if ok {
-									return ch.blocksData[nBlock.x][nBlock.y][nBlock.z].isSolid()
-								}
-								return false
-							}
-							side1 := getSolid(nx+a1x, ny+a1y, nz+a1z)
-							side2 := getSolid(nx+a2x, ny+a2y, nz+a2z)
-							corner := getSolid(nx+a1x+a2x, ny+a1y+a2y, nz+a1z+a2z)
-							aoLevel := 0
-							if side1 && side2 {
-								aoLevel = 3
-							} else {
-								if side1 {
-									aoLevel++
-								}
-								if side2 {
-									aoLevel++
-								}
-								if corner {
-									aoLevel++
-								}
-							}
-							aoTable := [...]float32{1.0, 1.0, 1.0, 1.0}
-							aoMul = aoTable[aoLevel]
-						}
+
 						// Smooth light from neighboring blocks around the vertex corner
 						getLight := func(dx, dy, dz int8) float32 {
 							nChunk, nBlock := calculateCrossChunkNeighbor(chunkPos, key.x, key.y, key.z, Vec3Int8{dx, dy, dz})
@@ -670,15 +580,18 @@ func createChunkVAO(_chunkData *chunkData, chunkPos chunkPosition) (uint32, int3
 			}
 		}
 	}
+	return &verts
+}
 
-	if len(verts) == 0 {
-		println("No vertices generated for chunk at position:")
+func createChunkVAO(verts *[]float32) (uint32, int32) {
+
+	if len(*verts) == 0 {
 		return 0, 0
 	}
 	var vbo uint32
 	gl.GenBuffers(1, &vbo)
 	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
-	gl.BufferData(gl.ARRAY_BUFFER, 4*len(verts), gl.Ptr(verts), gl.STATIC_DRAW)
+	gl.BufferData(gl.ARRAY_BUFFER, 4*len(*verts), gl.Ptr(*verts), gl.STATIC_DRAW)
 
 	var vao uint32
 	gl.GenVertexArrays(1, &vao)
@@ -705,7 +618,7 @@ func createChunkVAO(_chunkData *chunkData, chunkPos chunkPosition) (uint32, int3
 	gl.EnableVertexAttribArray(4)
 	gl.VertexAttribPointerWithOffset(4, 2, gl.FLOAT, false, 11*4, uintptr(9*4))
 
-	return vao, int32(len(verts) / 11)
+	return vao, int32(len(*verts) / 11)
 }
 func isBorderBlock(pos blockPosition) bool {
 	if pos.x == 0 || pos.x == CHUNK_SIZE || pos.y == 0 || pos.y == CHUNK_SIZE || pos.z == 0 || pos.z == CHUNK_SIZE {
@@ -775,7 +688,7 @@ func breakBlock(pos blockPosition, chunkPos chunkPosition) {
 		chunksToUpdate[chunkPos] = ch
 	}
 	chunksMu.RUnlock()
-	GenerateChunkMeshes(chunksToUpdate)
+	//GenerateChunkMeshes(chunksToUpdate)
 
 }
 
@@ -915,13 +828,10 @@ func updateWorldBoundsForChunk(pos chunkPosition) {
 }
 
 func propagateSunLightColumn(horiz chunkPositionLighting) {
+
 	lightingMu.RLock()
-	column := append([]chunkPosition(nil), lightingChunks[horiz]...)
+	column := lightingChunks[horiz]
 	lightingMu.RUnlock()
-	if len(column) == 0 {
-		return
-	}
-	sort.Slice(column, func(i, j int) bool { return column[i].y < column[j].y })
 
 	var blocks []chunkBlockPositions
 	chunksMu.RLock()
@@ -947,63 +857,53 @@ func propagateSunLightColumn(horiz chunkPositionLighting) {
 			}
 		}
 	}
+	chunksMu.RUnlock()
 	if len(blocks) > 0 {
 		BFSLightProp(blocks, false)
 	}
-	chunksMu.RUnlock()
-}
 
-func rebuildChunkAndNeighbors(pos chunkPosition) {
-	requestMeshRebuild(pos)
-	neighbors := []chunkPosition{
-		{pos.x + 1, pos.y, pos.z},
-		{pos.x - 1, pos.y, pos.z},
-		{pos.x, pos.y + 1, pos.z},
-		{pos.x, pos.y - 1, pos.z},
-		{pos.x, pos.y, pos.z + 1},
-		{pos.x, pos.y, pos.z - 1},
-	}
-	for _, np := range neighbors {
-		requestMeshRebuild(np)
-	}
 }
 
 func requestMeshRebuild(pos chunkPosition) {
-	pendingMu.Lock()
-	pendingMeshes[pos] = struct{}{}
-	pendingMu.Unlock()
-}
-
-// ProcessPendingMeshRebuilds should be called from the main thread each frame.
-func ProcessPendingMeshRebuilds() {
-
-	pendingMu.Lock()
-	if len(pendingMeshes) == 0 {
-		pendingMu.Unlock()
+	// Snapshot pointer under read lock, then release before heavy work
+	chunksMu.RLock()
+	ch, ok := chunks[pos]
+	chunksMu.RUnlock()
+	if !ok || ch == nil {
 		return
 	}
-	positions := make([]chunkPosition, 0, len(pendingMeshes))
-	for p := range pendingMeshes {
-		positions = append(positions, p)
-	}
-	pendingMeshes = make(map[chunkPosition]struct{})
-	pendingMu.Unlock()
 
-	toUpdate := make(map[chunkPosition]*chunkData)
-	chunksMu.RLock()
-	for _, p := range positions {
-		if ch, ok := chunks[p]; ok {
-			toUpdate[p] = ch
-		}
-	}
-	chunksMu.RUnlock()
+	verts := preProcessChunkVAO(ch, pos) // does internal chunksMu.RLock where needed
 
-	if len(toUpdate) > 0 {
-		GenerateChunkMeshes(toUpdate)
-	}
+	dirtyMu.Lock()
+	dirtyChunks[pos] = verts
+	dirtyMu.Unlock()
 }
 
-func ensureChunk(pos chunkPosition) {
+func ProcessChunks() {
+
+	dirtyMu.Lock()
+	if len(dirtyChunks) == 0 {
+		dirtyMu.Unlock()
+		return
+	}
+	chunksMu.Lock()
+
+	for cP, verts := range dirtyChunks {
+		vao, trisCount := createChunkVAO(verts)
+
+		chunks[cP].vao = vao
+		chunks[cP].trisCount = trisCount
+
+		delete(dirtyChunks, cP)
+	}
+
+	chunksMu.Unlock()
+	dirtyMu.Unlock()
+
+}
+
+func createChunk(pos chunkPosition) {
 	chunksMu.RLock()
 	_, exists := chunks[pos]
 	chunksMu.RUnlock()
@@ -1011,35 +911,32 @@ func ensureChunk(pos chunkPosition) {
 		return
 	}
 
-	c := chunk(pos)
+	chunkData := chunk(pos)
 
 	chunksMu.Lock()
-	chunks[pos] = c
-	chunksMu.Unlock()
+	chunks[pos] = chunkData
 
-	registerChunkInLighting(pos)
+	chunksMu.Unlock()
 	propagateSunLightColumn(chunkPositionLighting{pos.x, pos.z})
-	rebuildChunkAndNeighbors(pos)
+	requestMeshRebuild(pos)
+	registerChunkInLighting(pos)
+
 }
 
 func startChunkStreamer() {
-	const radius int32 = 6
-	ticker := time.NewTicker(200 * time.Millisecond)
+
+	ticker := time.NewTicker(1000 * time.Millisecond)
 	for range ticker.C {
 		cx := int32(math.Floor(float64(cameraPosition[0] / float32(CHUNK_SIZE))))
 		cy := int32(math.Floor(float64(cameraPosition[1] / float32(CHUNK_SIZE))))
 		cz := int32(math.Floor(float64(cameraPosition[2] / float32(CHUNK_SIZE))))
-
-		for x := cx - radius; x <= cx+radius; x++ {
-			for z := cz - radius; z <= cz+radius; z++ {
-				for y := cy - 2; y <= cy+2; y++ {
-					ensureChunk(chunkPosition{x, y, z})
+		_RENDER_DISTANCE := int32(RENDER_DISTANCE)
+		for x := cx - _RENDER_DISTANCE; x <= cx+_RENDER_DISTANCE; x++ {
+			for z := cz - _RENDER_DISTANCE; z <= cz+_RENDER_DISTANCE; z++ {
+				for y := cy - 3; y <= cy+3; y++ {
+					createChunk(chunkPosition{x, y, z})
 				}
 			}
 		}
 	}
-}
-
-func init() {
-	go startChunkStreamer()
 }

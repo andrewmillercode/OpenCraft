@@ -259,11 +259,13 @@ func movement(window *glfw.Window) {
 	if isFlying {
 		movementSpeed = FLYING_SPEED
 		if window.GetKey(glfw.KeySpace) == glfw.Press {
-			velocity[1] += movementSpeed * deltaTime
+			if window.GetKey(glfw.KeyLeftShift) == glfw.Press {
+				velocity[1] -= movementSpeed * deltaTime
+			} else {
+				velocity[1] += movementSpeed * deltaTime
+			}
 		}
-		if window.GetKey(glfw.KeyLeftControl) == glfw.Press {
-			velocity[1] -= movementSpeed * deltaTime
-		}
+
 	}
 
 	if window.GetKey(glfw.KeyLeftShift) == glfw.Press {
@@ -291,6 +293,14 @@ func movement(window *glfw.Window) {
 
 	velocity = velocity.Add(direction.Mul(movementSpeed * deltaTime))
 
+	if window.GetKey(glfw.KeySpace) == glfw.Press {
+		if !isOnGround || jumpCooldown != 0 {
+			return
+		}
+		jumpCooldown = 0.05
+		velocity[1] += JUMP_HEIGHT
+
+	}
 	if window.GetKey(glfw.KeySpace) == glfw.Press {
 		if !isOnGround || jumpCooldown != 0 {
 			return
