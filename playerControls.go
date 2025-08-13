@@ -31,125 +31,125 @@ func velocityDamping(damping float32) {
 
 // true = delete, false = create
 func raycast(action bool) {
-
-	var tMaxX, tMaxY, tMaxZ, tDeltaX, tDeltaY, tDeltaZ float32
-	var startPoint mgl32.Vec3 = cameraPosition.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Sub(cameraFront.Mul(0.1))
-	var endPoint mgl32.Vec3 = startPoint.Add(cameraFront.Mul(5))
-	var hitPoint mgl32.Vec3 = startPoint
-	var dx float32 = sign(endPoint.X() - startPoint.X())
-	if dx != 0 {
-		tDeltaX = float32(math.Min(float64((dx / (endPoint.X() - startPoint.X()))), 10000000))
-	} else {
-		tDeltaX = 10000000
-	}
-	if dx > 0 {
-		tMaxX = tDeltaX * frac1(startPoint.X())
-	} else {
-		tMaxX = tDeltaX * frac0(startPoint.X())
-	}
-
-	var dy float32 = sign(endPoint.Y() - startPoint.Y())
-	if dy != 0 {
-		tDeltaY = float32(math.Min(float64((dy / (endPoint.Y() - startPoint.Y()))), 10000000))
-	} else {
-		tDeltaY = 10000000
-	}
-	if dy > 0 {
-		tMaxY = tDeltaY * frac1(startPoint.Y())
-	} else {
-		tMaxY = tDeltaY * frac0(startPoint.Y())
-	}
-
-	var dz float32 = sign(endPoint.Z() - startPoint.Z())
-	if dz != 0 {
-		tDeltaZ = float32(math.Min(float64((dz / (endPoint.Z() - startPoint.Z()))), 10000000))
-	} else {
-		tDeltaZ = 10000000
-	}
-	if dz > 0 {
-		tMaxZ = tDeltaZ * frac1(startPoint.Z())
-	} else {
-		tMaxZ = tDeltaZ * frac0(startPoint.Z())
-	}
-	for !(tMaxX > 1 && tMaxY > 1 && tMaxZ > 1) {
-
-		ChunkPos := chunkPosition{
-			int32(math.Floor(float64(hitPoint[0] / float32(CHUNK_SIZE)))),
-			int32(math.Floor(float64(hitPoint[1] / float32(CHUNK_SIZE)))),
-			int32(math.Floor(float64(hitPoint[2] / float32(CHUNK_SIZE)))),
-		}
-
-		pos := blockPosition{
-			uint8(math.Floor(float64(hitPoint[0]) - float64(ChunkPos.x*int32(CHUNK_SIZE)))),
-			uint8(math.Floor(float64(hitPoint[1]) - float64(ChunkPos.y*int32(CHUNK_SIZE)))),
-			uint8(math.Floor(float64(hitPoint[2]) - float64(ChunkPos.z*int32(CHUNK_SIZE)))),
-		}
-		absPos := mgl32.Vec3{
-			float32(math.Floor(float64(hitPoint[0]))),
-			float32(math.Floor(float64(hitPoint[1]))),
-			float32(math.Floor(float64(hitPoint[2]))),
-		}
-		if action {
-			chunksMu.RLock()
-			chunk, ok := chunks[ChunkPos]
-			chunksMu.RUnlock()
-			if ok {
-
-				if chunk.blocksData[pos.x][pos.y][pos.z].isSolid() {
-					breakBlock(pos, ChunkPos)
-					return
-				}
-
-			}
-
-		}
-		if tMaxX < tMaxY {
-			if tMaxX < tMaxZ {
-				hitPoint[0] += dx
-				tMaxX += tDeltaX
-			} else {
-				hitPoint[2] += dz
-				tMaxZ += tDeltaZ
-			}
+	/*
+		var tMaxX, tMaxY, tMaxZ, tDeltaX, tDeltaY, tDeltaZ float32
+		var startPoint mgl32.Vec3 = cameraPosition.Add(mgl32.Vec3{0.5, 0.5, 0.5}).Sub(cameraFront.Mul(0.1))
+		var endPoint mgl32.Vec3 = startPoint.Add(cameraFront.Mul(5))
+		var hitPoint mgl32.Vec3 = startPoint
+		var dx float32 = sign(endPoint.X() - startPoint.X())
+		if dx != 0 {
+			tDeltaX = float32(math.Min(float64((dx / (endPoint.X() - startPoint.X()))), 10000000))
 		} else {
-			if tMaxY < tMaxZ {
-				hitPoint[1] += dy
-				tMaxY += tDeltaY
-			} else {
-				hitPoint[2] += dz
-				tMaxZ += tDeltaZ
-			}
+			tDeltaX = 10000000
 		}
-		if !action {
+		if dx > 0 {
+			tMaxX = tDeltaX * frac1(startPoint.X())
+		} else {
+			tMaxX = tDeltaX * frac0(startPoint.X())
+		}
 
-			tempChunkPos := chunkPosition{
-				int32(math.Floor(float64(hitPoint[0] / 32))),
-				int32(math.Floor(float64(hitPoint[1] / 32))),
-				int32(math.Floor(float64(hitPoint[2] / 32))),
+		var dy float32 = sign(endPoint.Y() - startPoint.Y())
+		if dy != 0 {
+			tDeltaY = float32(math.Min(float64((dy / (endPoint.Y() - startPoint.Y()))), 10000000))
+		} else {
+			tDeltaY = 10000000
+		}
+		if dy > 0 {
+			tMaxY = tDeltaY * frac1(startPoint.Y())
+		} else {
+			tMaxY = tDeltaY * frac0(startPoint.Y())
+		}
+
+		var dz float32 = sign(endPoint.Z() - startPoint.Z())
+		if dz != 0 {
+			tDeltaZ = float32(math.Min(float64((dz / (endPoint.Z() - startPoint.Z()))), 10000000))
+		} else {
+			tDeltaZ = 10000000
+		}
+		if dz > 0 {
+			tMaxZ = tDeltaZ * frac1(startPoint.Z())
+		} else {
+			tMaxZ = tDeltaZ * frac0(startPoint.Z())
+		}
+		for !(tMaxX > 1 && tMaxY > 1 && tMaxZ > 1) {
+
+			ChunkPos := chunkPosition{
+				int32(math.Floor(float64(hitPoint[0] / float32(CHUNK_SIZE)))),
+				int32(math.Floor(float64(hitPoint[1] / float32(CHUNK_SIZE)))),
+				int32(math.Floor(float64(hitPoint[2] / float32(CHUNK_SIZE)))),
 			}
-			tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*32))), uint8(math.Floor(float64(hitPoint[1]) - float64(tempChunkPos.y*32))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*32)))}
-			chunksMu.RLock()
-			chunk, ok := chunks[tempChunkPos]
-			chunksMu.RUnlock()
-			if ok {
-				if block := chunk.blocksData[tempPos.x][tempPos.y][tempPos.z]; block.isSolid() {
 
-					isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
-					//place a block if there is no block at the position and it is not colliding with the player
+			pos := blockPosition{
+				uint8(math.Floor(float64(hitPoint[0]) - float64(ChunkPos.x*int32(CHUNK_SIZE)))),
+				uint8(math.Floor(float64(hitPoint[1]) - float64(ChunkPos.y*int32(CHUNK_SIZE)))),
+				uint8(math.Floor(float64(hitPoint[2]) - float64(ChunkPos.z*int32(CHUNK_SIZE)))),
+			}
+			absPos := mgl32.Vec3{
+				float32(math.Floor(float64(hitPoint[0]))),
+				float32(math.Floor(float64(hitPoint[1]))),
+				float32(math.Floor(float64(hitPoint[2]))),
+			}
+			if action {
+				chunksMu.RLock()
+				chunk, ok := chunks[ChunkPos]
+				chunksMu.RUnlock()
+				if ok {
 
-					if !chunk.blocksData[pos.x][pos.y][pos.z].isSolid() && !isCollidingWithPlayer {
-						placeBlock(pos, ChunkPos, DirtID)
-
+					if chunk.blocksData[pos.x][pos.y][pos.z].isSolid() {
+						breakBlock(pos, ChunkPos)
 						return
 					}
 
 				}
+
+			}
+			if tMaxX < tMaxY {
+				if tMaxX < tMaxZ {
+					hitPoint[0] += dx
+					tMaxX += tDeltaX
+				} else {
+					hitPoint[2] += dz
+					tMaxZ += tDeltaZ
+				}
+			} else {
+				if tMaxY < tMaxZ {
+					hitPoint[1] += dy
+					tMaxY += tDeltaY
+				} else {
+					hitPoint[2] += dz
+					tMaxZ += tDeltaZ
+				}
+			}
+			if !action {
+
+				tempChunkPos := chunkPosition{
+					int32(math.Floor(float64(hitPoint[0] / 32))),
+					int32(math.Floor(float64(hitPoint[1] / 32))),
+					int32(math.Floor(float64(hitPoint[2] / 32))),
+				}
+				tempPos := blockPosition{uint8(math.Floor(float64(hitPoint[0]) - float64(tempChunkPos.x*32))), uint8(math.Floor(float64(hitPoint[1]) - float64(tempChunkPos.y*32))), uint8(math.Floor(float64(hitPoint[2]) - float64(tempChunkPos.z*32)))}
+				chunksMu.RLock()
+				chunk, ok := chunks[tempChunkPos]
+				chunksMu.RUnlock()
+				if ok {
+					if block := chunk.blocksData[tempPos.x][tempPos.y][tempPos.z]; block.isSolid() {
+
+						isCollidingWithPlayer := IsCollidingWithPlacedBlock(absPos)
+						//place a block if there is no block at the position and it is not colliding with the player
+
+						if !chunk.blocksData[pos.x][pos.y][pos.z].isSolid() && !isCollidingWithPlayer {
+							placeBlock(pos, ChunkPos, DirtID)
+
+							return
+						}
+
+					}
+				}
+
 			}
 
 		}
-
-	}
-
+	*/
 }
 
 func input(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {

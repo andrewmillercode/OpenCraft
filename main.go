@@ -231,7 +231,7 @@ func main() {
 	window.SetMouseButtonCallback(mouseInputCallback)
 	window.SetKeyCallback(input)
 
-	go startChunkStreamer()
+	makeTestChunks()
 
 	initialized := false
 	for !window.ShouldClose() {
@@ -304,20 +304,27 @@ func main() {
 
 		ProcessChunks()
 
-		chunksMu.RLock()
-		for chunkPos, chunkData := range chunks {
+		pillarsMu.RLock()
+		for pillarPos, pillarData := range pillars {
+			for chunkIndex, chunkData := range pillarData.chunks {
 
-			if chunkData.trisCount > 0 {
-				//render the chunk
-				modelPos := mgl32.Translate3D(float32(chunkPos.x*int32(CHUNK_SIZE)), float32(chunkPos.y*int32(CHUNK_SIZE)), float32(chunkPos.z*int32(CHUNK_SIZE)))
+				if chunkData.trisCount > 0 {
+					//render the chunk
+					modelPos := mgl32.Translate3D(
+						float32(pillarPos.getWorldX()),
+						float32(getWorldYFromIndex(uint8(chunkIndex))),
+						float32(pillarPos.getWorldZ()),
+					)
 
-				gl.UniformMatrix4fv(modelLoc3D, 1, false, &modelPos[0])
-				gl.BindVertexArray(chunkData.vao)
-				gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
+					gl.UniformMatrix4fv(modelLoc3D, 1, false, &modelPos[0])
+					gl.BindVertexArray(chunkData.vao)
+					gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
 
+				}
 			}
 		}
-		chunksMu.RUnlock()
+
+		pillarsMu.RUnlock()
 
 		if showDebug {
 			gl.Disable(gl.DEPTH_TEST)

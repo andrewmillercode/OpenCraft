@@ -9,7 +9,7 @@ import "github.com/go-gl/mathgl/mgl32"
  */
 
 type Pillar struct {
-	chunks [64]Chunk // 64 chunks per pillar
+	chunks [64]*Chunk // 64 chunks per pillar
 	pos    PillarPos
 }
 
@@ -21,8 +21,23 @@ type ChunkPosition struct {
 	index     uint8
 }
 
-func (c ChunkPosition) getY() int32 {
+func (c ChunkPosition) getWorldY() int32 {
 	return int32(c.index * CHUNK_SIZE)
+}
+func getWorldYFromIndex(cI uint8) int32 {
+	return int32(cI * CHUNK_SIZE)
+}
+func (c ChunkPosition) getWorldX() int32 {
+	return int32(uint8(c.pillarPos.x) * CHUNK_SIZE)
+}
+func (c ChunkPosition) getWorldZ() int32 {
+	return int32(uint8(c.pillarPos.z) * CHUNK_SIZE)
+}
+func (p PillarPos) getWorldX() int32 {
+	return int32(uint8(p.x) * CHUNK_SIZE)
+}
+func (p PillarPos) getWorldZ() int32 {
+	return int32(uint8(p.z) * CHUNK_SIZE)
 }
 
 type Chunk struct {
@@ -79,4 +94,8 @@ type text struct {
 type collider struct {
 	Time   float32
 	Normal []int
+}
+type ChunkBlockPositions struct {
+	chunkPos ChunkPosition
+	blockPos blockPosition
 }
