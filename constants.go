@@ -11,8 +11,8 @@ const (
 
 	CHUNK_SIZE          uint8 = 16 // 16^3 block sized chunks
 	CHUNK_SIZE_i32      int32 = 16
-	RENDER_DISTANCE_i32 int32 = 2
-	RENDER_DISTANCE     uint8 = 2
+	RENDER_DISTANCE_i32 int32 = 4
+	RENDER_DISTANCE     uint8 = 4
 )
 
 type faceMapStruct struct {

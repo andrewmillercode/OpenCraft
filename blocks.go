@@ -4,8 +4,10 @@ import (
 	"image"
 	"image/draw"
 	"image/png"
+	"math"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
@@ -27,13 +29,13 @@ func createChunkData(chunkPos ChunkPosition) *Chunk {
 	for x := range CHUNK_SIZE_i32 {
 		for z := range CHUNK_SIZE_i32 {
 
-			noiseValue := fractalNoise(int32(x)+(chunkPos.pillarPos.x*CHUNK_SIZE_i32), int32(z)+(chunkPos.pillarPos.z*CHUNK_SIZE_i32), amplitude, 2, 1.5, 0.5, scale)
+			noiseValue := fractalNoise(int32(x)+(chunkPos.pillarPos.getWorldX()), int32(z)+(chunkPos.pillarPos.getWorldZ()), amplitude, 2, 1.5, 0.5, scale) + 40
 
 			for y := range CHUNK_SIZE {
 
 				worldY := int32(y) + chunkPos.getWorldY()
 
-				if worldY > noiseValue {
+				if worldY > (noiseValue) {
 					// Air blocks above terrain
 					blocksData[x][y][z] = &Block{blockType: AirID}
 
@@ -41,21 +43,25 @@ func createChunkData(chunkPos ChunkPosition) *Chunk {
 					// At or below terrain level
 					if worldY < 0 {
 						// Underground cave generation
-						isCave := fractalNoise3D(int32(x)+(chunkPos.pillarPos.x*CHUNK_SIZE_i32), int32(y)+(chunkPos.getWorldY()*CHUNK_SIZE_i32), int32(z)+(chunkPos.pillarPos.z*CHUNK_SIZE_i32), 2, 12)
-						if isCave > 0.1 {
+						/*
+							isCave := fractalNoise3D(int32(x)+(chunkPos.pillarPos.x*CHUNK_SIZE_i32), int32(y)+(chunkPos.getWorldY()*CHUNK_SIZE_i32), int32(z)+(chunkPos.pillarPos.z*CHUNK_SIZE_i32), 2, 12)
 
-							blocksData[x][y][z] = &Block{blockType: AirID}
+							if isCave > 0.1 {
 
-						} else {
-							// Solid underground blocks
-							if worldY == noiseValue {
-								blocksData[x][y][z] = &Block{blockType: DirtID}
+								blocksData[x][y][z] = &Block{blockType: AirID}
 
 							} else {
+								// Solid underground blocks
+								if worldY == noiseValue {
+									blocksData[x][y][z] = &Block{blockType: DirtID}
 
-								blocksData[x][y][z] = &Block{blockType: StoneID}
+								} else {
+
+									blocksData[x][y][z] = &Block{blockType: StoneID}
+								}
 							}
-						}
+						*/
+						blocksData[x][y][z] = &Block{blockType: StoneID}
 					} else {
 						// Surface/above-ground terrain
 						if worldY == noiseValue {
@@ -79,19 +85,71 @@ func createChunkData(chunkPos ChunkPosition) *Chunk {
 		trisCount:    0,
 	}
 }
+func queueChunkRebuild(cP ChunkPosition) {
+	// Grab the chunk safely
+	pillarsMu.RLock()
+	pl := pillars[cP.pillarPos]
+	var ch *Chunk
+	if pl != nil {
+		ch = pl.chunks[cP.index]
+	}
+	pillarsMu.RUnlock()
+	if ch == nil {
+		return
+	}
 
+	verts := preProcessChunkVAO(ch, cP)
+	dirtyChunksMu.Lock()
+	dirtyChunks[cP] = verts
+	dirtyChunksMu.Unlock()
+}
 func CreatePillar(pos PillarPos) bool {
-	pillarsMu.Lock()
+
+	pillarsMu.RLock()
 	_, exists := pillars[pos]
-	if !exists {
-		pillars[pos] = &Pillar{
-			chunks: [64]*Chunk{},
-			pos:    pos,
+	pillarsMu.RUnlock()
+	if exists {
+		return false
+	}
+
+	pillarsMu.Lock()
+	if _, exists := pillars[pos]; exists {
+		pillarsMu.Unlock()
+		return false
+	}
+	var pillar = &Pillar{}
+	pillars[pos] = pillar
+	pillarsMu.Unlock()
+
+	// First create all Chunk data so nil neighbors inside the pillar won't happen
+	for y := uint8(0); y < 64; y++ {
+		chunkPos := ChunkPosition{pos, y}
+		pillar.chunks[y] = createChunkData(chunkPos)
+	}
+
+	// Then mesh each chunk and notify neighbors
+	for y := uint8(0); y < 64; y++ {
+		chunkPos := ChunkPosition{pos, y}
+		buildChunk(pillar.chunks[y], chunkPos) // queues current chunk upload
+
+		// Rebuild existing neighbors to cull border faces
+		for _, n := range neighborChunkPositions(chunkPos) {
+			pillarsMu.RLock()
+			neighborPillar := pillars[n.pillarPos]
+			var neighborExists bool
+			if neighborPillar != nil && neighborPillar.chunks[n.index] != nil {
+				neighborExists = true
+			}
+			pillarsMu.RUnlock()
+
+			if neighborExists {
+				queueChunkRebuild(n)
+			}
 		}
 
 	}
-	pillarsMu.Unlock()
-	return !exists
+
+	return true
 }
 func loadTextureAtlas(textureFilePath string) uint32 {
 
@@ -345,12 +403,7 @@ func fractalNoise(x int32, z int32, amplitude float32, octaves int, lacunarity f
 		x1 *= lacunarity
 		amplitude *= persistence
 	}
-	if val < -128 {
-		return -128
-	}
-	if val > 128 {
-		return 128
-	}
+
 	return val
 
 }
@@ -383,66 +436,71 @@ func getAdjBlockFromFace(key blockPosition, chunkPos ChunkPosition, face uint8) 
 
 	var adjPillar PillarPos = chunkPos.pillarPos
 	var adjChunkIndex = chunkPos.index
-	var adjBlock blockPosition
-	var boundHit = false
+	var adjBlock blockPosition = key
 
 	switch face {
 	case FACE_MAP.FRONT:
 		if key.z == CHUNK_SIZE-1 {
 			adjPillar.z += 1
-			adjBlock = blockPosition{key.x, key.y, 0}
+			adjBlock.z = 0
 		} else {
-			adjBlock = blockPosition{key.x, key.y, key.z + 1}
+			adjBlock.z += 1
 		}
 	case FACE_MAP.BACK:
 		if key.z == 0 {
 			adjPillar.z -= 1
-			adjBlock = blockPosition{key.x, key.y, CHUNK_SIZE - 1}
+			adjBlock.z = CHUNK_SIZE - 1
 		} else {
-			adjBlock = blockPosition{key.x, key.y, key.z - 1}
+			adjBlock.z -= 1
 		}
 	case FACE_MAP.RIGHT:
 		if key.x == CHUNK_SIZE-1 {
 			adjPillar.x += 1
-			adjBlock = blockPosition{0, key.y, key.z}
+			adjBlock.x = 0
 		} else {
-			adjBlock = blockPosition{key.x + 1, key.y, key.z}
+			adjBlock.x += 1
 		}
 	case FACE_MAP.LEFT:
 		if key.x == 0 {
 			adjPillar.x -= 1
-			adjBlock = blockPosition{CHUNK_SIZE - 1, key.y, key.z}
+			adjBlock.x = CHUNK_SIZE - 1
 		} else {
-			adjBlock = blockPosition{key.x - 1, key.y, key.z}
+			adjBlock.x -= 1
 		}
 	case FACE_MAP.UP:
 		if key.y == CHUNK_SIZE-1 {
-			if adjChunkIndex == 63 {
-				boundHit = true
+			if adjChunkIndex < 63 {
+				adjChunkIndex += 1
 			}
-			adjChunkIndex += 1
 			adjBlock = blockPosition{key.x, 0, key.z}
 		} else {
 			adjBlock = blockPosition{key.x, key.y + 1, key.z}
 		}
 	case FACE_MAP.DOWN:
 		if key.y == 0 {
-			if adjChunkIndex == 0 {
-				boundHit = true
+			if adjChunkIndex > 0 {
+				adjChunkIndex -= 1
 			}
-			adjChunkIndex -= 1
 			adjBlock = blockPosition{key.x, CHUNK_SIZE - 1, key.z}
 		} else {
 			adjBlock = blockPosition{key.x, key.y - 1, key.z}
 		}
 	}
+	//println(adjPillar.x, adjPillar.z)
 
-	if _, ok := pillars[adjPillar]; ok && !boundHit && (adjBlock != blockPosition{}) &&
-		(pillars[adjPillar].chunks[adjChunkIndex].blocksData[adjBlock.x][adjBlock.y][adjBlock.z] != nil) {
-
-		return adjBjockResult{ok: true, Block: pillars[adjPillar].chunks[adjChunkIndex].blocksData[adjBlock.x][adjBlock.y][adjBlock.z], chunkPos: ChunkPosition{adjPillar, adjChunkIndex}, blockPos: adjBlock}
+	if p, ok := pillars[adjPillar]; ok {
+		ch := p.chunks[adjChunkIndex]
+		if ch != nil {
+			return adjBjockResult{
+				ok:       true,
+				Block:    ch.blocksData[adjBlock.x][adjBlock.y][adjBlock.z],
+				chunkPos: ChunkPosition{adjPillar, adjChunkIndex},
+				blockPos: adjBlock,
+			}
+		}
 	}
-	return adjBjockResult{ok: false, Block: &Block{}, chunkPos: ChunkPosition{}, blockPos: blockPosition{}}
+
+	return adjBjockResult{}
 }
 
 var grassTint = mgl32.Vec3{0.486, 0.741, 0.419}
@@ -499,6 +557,7 @@ func preProcessChunkVAO(_Chunk *Chunk, chunkPos ChunkPosition) *[]float32 {
 				if hideEntireBlock {
 					continue
 				}
+
 				const FACE_SIZE = 18
 
 				for i := 0; i < len(CubeVertices); i += 3 {
@@ -512,83 +571,89 @@ func preProcessChunkVAO(_Chunk *Chunk, chunkPos ChunkPosition) *[]float32 {
 					face := uint8(i / FACE_SIZE)
 
 					if shouldRender[face] {
-						// Determine signs from relative vertex position
-						var sx int8 = -1
-						if CubeVertices[i] > 0 {
-							sx = 1
-						}
-						var sy int8 = -1
-						if CubeVertices[i+1] > 0 {
-							sy = 1
-						}
-						var sz int8 = -1
-						if CubeVertices[i+2] > 0 {
-							sz = 1
-						}
-						// Normal and in-plane axes for the current face
-						var nx, ny, nz int8 = 0, 0, 0
-						var a1x, a1y, a1z int8 = 0, 0, 0
-						var a2x, a2y, a2z int8 = 0, 0, 0
-						switch face {
-						case FACE_MAP.FRONT:
-							nz = 1
-							a1x = sx
-							a2y = sy
-						case FACE_MAP.BACK:
-							nz = -1
-							a1x = sx
-							a2y = sy
-						case FACE_MAP.LEFT:
-							nx = -1
-							a1z = sz
-							a2y = sy
-						case FACE_MAP.RIGHT:
-							nx = 1
-							a1z = sz
-							a2y = sy
-						case FACE_MAP.UP:
-							ny = 1
-							a1x = sx
-							a2z = sz
-						case FACE_MAP.DOWN:
-							ny = -1
-							a1x = sx
-							a2z = sz
-						}
-						// AO factor based on occluders
-						aoMul := float32(1.0)
-
-						// Smooth light from neighboring blocks around the vertex corner
-						getLight := func(dx, dy, dz int8) float32 {
-							nChunk, nBlock := calculateCrossChunkNeighbor(chunkPos, key.x, key.y, key.z, Vec3Int8{dx, dy, dz})
-							pillarsMu.RLock()
-							pl, ok := pillars[nChunk.pillarPos]
-							pillarsMu.RUnlock()
-							if ok {
-								return float32(pl.chunks[nChunk.index].blocksData[nBlock.x][nBlock.y][nBlock.z].lightLevel())
+						/*
+							// Determine signs from relative vertex position
+							var sx int8 = -1
+							if CubeVertices[i] > 0 {
+								sx = 1
 							}
-							return 0
-						}
-						l0 := getLight(nx, ny, nz)
-						l1 := getLight(nx+a1x, ny+a1y, nz+a1z)
-						l2 := getLight(nx+a2x, ny+a2y, nz+a2z)
-						l3 := getLight(nx+a1x+a2x, ny+a1y+a2y, nz+a1z+a2z)
-						avgLight := (l0 + l1 + l2 + l3) * 0.25
-						// Directional face shading
-						dirMul := float32(1.0)
-						if face == FACE_MAP.DOWN {
-							dirMul *= 0.5
-						}
-						if face == FACE_MAP.UP {
-							dirMul *= 0.8
-						}
-						if face == FACE_MAP.FRONT || face == FACE_MAP.BACK {
-							dirMul *= 0.7
-						}
-						if face == FACE_MAP.RIGHT || face == FACE_MAP.LEFT {
-							dirMul *= 0.6
-						}
-						vertexLight := avgLight * dirMul * aoMul
+							var sy int8 = -1
+							if CubeVertices[i+1] > 0 {
+								sy = 1
+							}
+							var sz int8 = -1
+							if CubeVertices[i+2] > 0 {
+								sz = 1
+							}
+							// Normal and in-plane axes for the current face
+							var nx, ny, nz int8 = 0, 0, 0
+							var a1x, a1y, a1z int8 = 0, 0, 0
+							var a2x, a2y, a2z int8 = 0, 0, 0
+							switch face {
+							case FACE_MAP.FRONT:
+								nz = 1
+								a1x = sx
+								a2y = sy
+							case FACE_MAP.BACK:
+								nz = -1
+								a1x = sx
+								a2y = sy
+							case FACE_MAP.LEFT:
+								nx = -1
+								a1z = sz
+								a2y = sy
+							case FACE_MAP.RIGHT:
+								nx = 1
+								a1z = sz
+								a2y = sy
+							case FACE_MAP.UP:
+								ny = 1
+								a1x = sx
+								a2z = sz
+							case FACE_MAP.DOWN:
+								ny = -1
+								a1x = sx
+								a2z = sz
+							}
+
+								// AO factor based on occluders
+								aoMul := float32(1.0)
+
+								// Smooth light from neighboring blocks around the vertex corner
+								getLight := func(dx, dy, dz int8) float32 {
+									nChunk, nBlock := calculateCrossChunkNeighbor(chunkPos, key.x, key.y, key.z, Vec3Int8{dx, dy, dz})
+									//pillarsMu.RLock()
+									pl, ok := pillars[nChunk.pillarPos]
+									if !ok {
+										//pillarsMu.RUnlock()
+										return 0
+									}
+									lightLevel := float32(pl.chunks[nChunk.index].blocksData[nBlock.x][nBlock.y][nBlock.z].lightLevel())
+									//pillarsMu.RUnlock()
+									return lightLevel
+								}
+								l0 := getLight(nx, ny, nz)
+								l1 := getLight(nx+a1x, ny+a1y, nz+a1z)
+								l2 := getLight(nx+a2x, ny+a2y, nz+a2z)
+								l3 := getLight(nx+a1x+a2x, ny+a1y+a2y, nz+a1z+a2z)
+								avgLight := (l0 + l1 + l2 + l3) * 0.25
+								// Directional face shading
+								dirMul := float32(1.0)
+								if face == FACE_MAP.DOWN {
+									dirMul *= 0.5
+								}
+								if face == FACE_MAP.UP {
+									dirMul *= 0.8
+								}
+								if face == FACE_MAP.FRONT || face == FACE_MAP.BACK {
+									dirMul *= 0.7
+								}
+								if face == FACE_MAP.RIGHT || face == FACE_MAP.LEFT {
+									dirMul *= 0.6
+								}
+								vertexLight := avgLight * dirMul * aoMul
+						*/
+						vertexLight := float32(self.lightLevel())
 						if vertexLight < 0 {
 							vertexLight = 0
 						}
@@ -597,6 +662,7 @@ func preProcessChunkVAO(_Chunk *Chunk, chunkPos ChunkPosition) *[]float32 {
 						}
 						GenerateBlockFace(key, chunkPos, face, &verts, *self, y, z, x, curTint, u, v, vertexLight, true)
 					}
+
 				}
 
 			}
@@ -780,7 +846,7 @@ func ProcessChunks() {
 		dirtyChunksMu.Unlock()
 		return
 	}
-	dirtyChunksMu.Lock()
+	pillarsMu.Lock()
 
 	for cP, verts := range dirtyChunks {
 		vao, trisCount := createChunkVAO(verts)
@@ -797,10 +863,6 @@ func ProcessChunks() {
 
 func buildChunk(chunk *Chunk, pos ChunkPosition) {
 
-	pillarsMu.Lock()
-	pillars[pos.pillarPos].chunks[pos.index] = chunk
-	pillarsMu.Unlock()
-
 	//	propagateSunLightColumn(chunkPositionLighting{pos.x, pos.z})
 	//requestMeshRebuild(pos)
 
@@ -808,41 +870,38 @@ func buildChunk(chunk *Chunk, pos ChunkPosition) {
 	dirtyChunksMu.Lock()
 	dirtyChunks[pos] = verts
 	dirtyChunksMu.Unlock()
-
 	//	registerChunkInLighting(pos)
 
 }
-
+func neighborChunkPositions(c ChunkPosition) []ChunkPosition {
+	res := make([]ChunkPosition, 0, 6)
+	// Up/Down within pillar (0..63)
+	if c.index > 0 {
+		res = append(res, ChunkPosition{pillarPos: c.pillarPos, index: c.index - 1})
+	}
+	if c.index < 63 {
+		res = append(res, ChunkPosition{pillarPos: c.pillarPos, index: c.index + 1})
+	}
+	// +/- X pillar
+	res = append(res, ChunkPosition{pillarPos: PillarPos{x: c.pillarPos.x - 1, z: c.pillarPos.z}, index: c.index})
+	res = append(res, ChunkPosition{pillarPos: PillarPos{x: c.pillarPos.x + 1, z: c.pillarPos.z}, index: c.index})
+	// +/- Z pillar
+	res = append(res, ChunkPosition{pillarPos: PillarPos{x: c.pillarPos.x, z: c.pillarPos.z - 1}, index: c.index})
+	res = append(res, ChunkPosition{pillarPos: PillarPos{x: c.pillarPos.x, z: c.pillarPos.z + 1}, index: c.index})
+	return res
+}
 func makeTestChunks() {
-	/*
-		ticker := time.NewTicker(1000 * time.Millisecond)
-		for range ticker.C {
-			cx := int32(math.Floor(float64(cameraPosition[0] / float32(CHUNK_SIZE))))
-			cy := int32(math.Floor(float64(cameraPosition[1] / float32(CHUNK_SIZE))))
-			cz := int32(math.Floor(float64(cameraPosition[2] / float32(CHUNK_SIZE))))
-			_RENDER_DISTANCE := int32(RENDER_DISTANCE)
-			for x := cx - _RENDER_DISTANCE; x <= cx+_RENDER_DISTANCE; x++ {
-				for z := cz - _RENDER_DISTANCE; z <= cz+_RENDER_DISTANCE; z++ {
-					for y := cy - 3; y <= cy+3; y++ {
-						createChunk(chunkPosition{x, y, z})
-					}
-				}
-			}
-		}
-	*/
 
-	for x := -RENDER_DISTANCE_i32; x <= RENDER_DISTANCE_i32; x++ {
-		for z := -RENDER_DISTANCE_i32; z <= RENDER_DISTANCE_i32; z++ {
-			createdPillar := CreatePillar(PillarPos{x, z})
-			if createdPillar {
-				for y := uint8(0); y < 12; y++ {
-					chunkPos := ChunkPosition{
-						PillarPos{int32(x), int32(z)},
-						y}
-					chunkData := createChunkData(chunkPos)
-					buildChunk(chunkData, chunkPos)
-				}
+	ticker := time.NewTicker(time.Duration(TICK_UPDATE_RATE * float32(time.Second)))
+	for range ticker.C {
+		cx := int32(math.Floor(float64(cameraPosition[0] / float32(CHUNK_SIZE))))
+		cz := int32(math.Floor(float64(cameraPosition[2] / float32(CHUNK_SIZE))))
+		for x := -RENDER_DISTANCE_i32; x <= RENDER_DISTANCE_i32; x++ {
+			for z := -RENDER_DISTANCE_i32; z <= RENDER_DISTANCE_i32; z++ {
+				pillarPos := PillarPos{x + cx, z + cz}
+				CreatePillar(pillarPos)
 			}
 		}
 	}
+
 }

@@ -231,7 +231,7 @@ func main() {
 	window.SetMouseButtonCallback(mouseInputCallback)
 	window.SetKeyCallback(input)
 
-	makeTestChunks()
+	go makeTestChunks()
 
 	initialized := false
 	for !window.ShouldClose() {
@@ -305,23 +305,29 @@ func main() {
 		ProcessChunks()
 
 		pillarsMu.RLock()
+
 		for pillarPos, pillarData := range pillars {
-			for chunkIndex, chunkData := range pillarData.chunks {
 
-				if chunkData.trisCount > 0 {
-					//render the chunk
-					modelPos := mgl32.Translate3D(
-						float32(pillarPos.getWorldX()),
-						float32(getWorldYFromIndex(uint8(chunkIndex))),
-						float32(pillarPos.getWorldZ()),
-					)
+			for i, chunkData := range pillarData.chunks {
+				if chunkData != nil && chunkData.trisCount > 0 {
 
-					gl.UniformMatrix4fv(modelLoc3D, 1, false, &modelPos[0])
-					gl.BindVertexArray(chunkData.vao)
-					gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
+					if chunkData.trisCount > 0 {
+						//render the chunk
 
+						modelPos := mgl32.Translate3D(
+							float32(pillarPos.getWorldX()),
+							float32(getWorldYFromIndex(uint8(i))),
+							float32(pillarPos.getWorldZ()),
+						)
+
+						gl.UniformMatrix4fv(modelLoc3D, 1, false, &modelPos[0])
+						gl.BindVertexArray(chunkData.vao)
+						gl.DrawArrays(gl.TRIANGLES, 0, chunkData.trisCount)
+
+					}
 				}
 			}
+
 		}
 
 		pillarsMu.RUnlock()

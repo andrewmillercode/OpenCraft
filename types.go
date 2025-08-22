@@ -22,22 +22,22 @@ type ChunkPosition struct {
 }
 
 func (c ChunkPosition) getWorldY() int32 {
-	return int32(c.index * CHUNK_SIZE)
+	return int32(c.index*CHUNK_SIZE) - 32
 }
 func getWorldYFromIndex(cI uint8) int32 {
-	return int32(cI * CHUNK_SIZE)
+	return int32(cI*CHUNK_SIZE) - 32
 }
 func (c ChunkPosition) getWorldX() int32 {
-	return int32(uint8(c.pillarPos.x) * CHUNK_SIZE)
+	return c.pillarPos.x * CHUNK_SIZE_i32
 }
 func (c ChunkPosition) getWorldZ() int32 {
-	return int32(uint8(c.pillarPos.z) * CHUNK_SIZE)
+	return c.pillarPos.z * CHUNK_SIZE_i32
 }
 func (p PillarPos) getWorldX() int32 {
-	return int32(uint8(p.x) * CHUNK_SIZE)
+	return p.x * CHUNK_SIZE_i32
 }
 func (p PillarPos) getWorldZ() int32 {
-	return int32(uint8(p.z) * CHUNK_SIZE)
+	return p.z * CHUNK_SIZE_i32
 }
 
 type Chunk struct {
